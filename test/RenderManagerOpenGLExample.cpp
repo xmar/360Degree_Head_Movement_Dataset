@@ -213,98 +213,15 @@ void DrawWorld(
 
     osvr::renderkit::GraphicsLibraryOpenGL* glLibrary = library.OpenGL;
 
-    /// Put the transform into the OpenGL ModelView matrix
+    // /// Put the transform into the OpenGL ModelView matrix
     GLdouble modelView[16];
     osvr::renderkit::OSVR_PoseState_to_OpenGL(modelView, pose);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glMultMatrixd(modelView);
-    exit(1);
 
     /// Draw a cube with a 5-meter radius as the room we are floating in.
-    //draw_cube(5.0);
-}
-
-void DrawLeftHand(
-    void* userData //< Passed into AddRenderCallback
-    , osvr::renderkit::GraphicsLibrary library //< Graphics library context to use
-    , osvr::renderkit::RenderBuffer buffers //< Buffers to use
-    , osvr::renderkit::OSVR_ViewportDescription
-        viewport //< Viewport we're rendering into
-    , OSVR_PoseState pose //< OSVR ModelView matrix set by RenderManager
-    , osvr::renderkit::OSVR_ProjectionMatrix
-        projection //< Projection matrix set by RenderManager
-    , OSVR_TimeValue deadline //< When the frame should be sent to the screen
-    ) {
-    // Make sure our pointers are filled in correctly.  The config file selects
-    // the graphics library to use, and may not match our needs.
-    if (library.OpenGL == nullptr) {
-        std::cerr
-            << "DrawLeftHand: No OpenGL GraphicsLibrary, this should not happen"
-            << std::endl;
-        return;
-    }
-    if (buffers.OpenGL == nullptr) {
-        std::cerr
-            << "DrawLeftHand: No OpenGL RenderBuffer, this should not happen"
-            << std::endl;
-        return;
-    }
-
-    std::cout << "Draw left hand" << std::endl;
-
-    osvr::renderkit::GraphicsLibraryOpenGL* glLibrary = library.OpenGL;
-
-    /// Put the transform into the OpenGL ModelView matrix
-    GLdouble modelView[16];
-    osvr::renderkit::OSVR_PoseState_to_OpenGL(modelView, pose);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    glMultMatrixd(modelView);
-
-    /// Draw a cube with a 0.1-meter radius.
-    //draw_cube(0.05);
-}
-
-void DrawRightHand(
-    void* userData //< Passed into AddRenderCallback
-    , osvr::renderkit::GraphicsLibrary library //< Graphics library context to use
-    , osvr::renderkit::RenderBuffer buffers //< Buffers to use
-    , osvr::renderkit::OSVR_ViewportDescription
-        viewport //< Viewport we're rendering into
-    , OSVR_PoseState pose //< OSVR ModelView matrix set by RenderManager
-    , osvr::renderkit::OSVR_ProjectionMatrix
-        projection //< Projection matrix set by RenderManager
-    , OSVR_TimeValue deadline //< When the frame should be sent to the screen
-    ) {
-    // Make sure our pointers are filled in correctly.  The config file selects
-    // the graphics library to use, and may not match our needs.
-    if (library.OpenGL == nullptr) {
-        std::cerr << "DrawRightHand: No OpenGL GraphicsLibrary, this should "
-                     "not happen"
-                  << std::endl;
-        return;
-    }
-    if (buffers.OpenGL == nullptr) {
-        std::cerr
-            << "DrawRightHand: No OpenGL RenderBuffer, this should not happen"
-            << std::endl;
-        return;
-    }
-
-    std::cout << "Draw right hand" << std::endl;
-
-    osvr::renderkit::GraphicsLibraryOpenGL* glLibrary = library.OpenGL;
-
-    /// Put the transform into the OpenGL ModelView matrix
-    GLdouble modelView[16];
-    osvr::renderkit::OSVR_PoseState_to_OpenGL(modelView, pose);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    glMultMatrixd(modelView);
-
-    /// Draw a cube with a 0.1-meter radius.
-    draw_cube(0.05);
+    draw_cube(5.0);
 }
 
 int main(int argc, char* argv[]) {
@@ -312,18 +229,6 @@ int main(int argc, char* argv[]) {
     // that we need.
     osvr::clientkit::ClientContext context(
         "com.osvr.renderManager.openGLExample");
-
-    // Construct button devices and connect them to a callback
-    // that will set the "quit" variable to true when it is
-    // pressed.  Use button "1" on the left-hand or
-    // right-hand controller.
-    osvr::clientkit::Interface leftButton1 =
-        context.getInterface("/controller/left/1");
-    leftButton1.registerCallback(&myButtonCallback, &quit);
-
-    osvr::clientkit::Interface rightButton1 =
-        context.getInterface("/controller/right/1");
-    rightButton1.registerCallback(&myButtonCallback, &quit);
 
     // Open Direct3D and set up the context for rendering to
     // an HMD.  Do this using the OSVR RenderManager interface,
@@ -393,16 +298,14 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-static GLfloat matspec[4] = {0.5, 0.5, 0.5, 0.0};
-static float red_col[] = {1.0, 0.0, 0.0};
-static float grn_col[] = {0.0, 1.0, 0.0};
-static float blu_col[] = {0.0, 0.0, 1.0};
-static float yel_col[] = {1.0, 1.0, 0.0};
-static float lightblu_col[] = {0.0, 1.0, 1.0};
-static float pur_col[] = {1.0, 0.0, 1.0};
-
 void draw_cube(double radius) {
-    GLfloat matspec[4] = {0.5, 0.5, 0.5, 0.0};
+    static const GLfloat matspec[4] = {0.5, 0.5, 0.5, 0.0};
+    static const float red_col[] = {1.0, 0.0, 0.0};
+    static const float grn_col[] = {0.0, 1.0, 0.0};
+    static const float blu_col[] = {0.0, 0.0, 1.0};
+    static const float yel_col[] = {1.0, 1.0, 0.0};
+    static const float lightblu_col[] = {0.0, 1.0, 1.0};
+    static const float pur_col[] = {1.0, 0.0, 1.0};
     glPushMatrix();
     glScaled(radius, radius, radius);
     glMaterialfv(GL_FRONT, GL_SPECULAR, matspec);
