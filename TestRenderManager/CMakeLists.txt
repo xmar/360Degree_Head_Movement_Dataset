@@ -8,6 +8,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 
 find_package(osvr REQUIRED)
 find_package(SDL2 REQUIRED)
+find_package(GLEW REQUIRED)
 find_package(osvrRenderManager REQUIRED)
 osvrrm_find_SDL2()
 osvrrm_find_GLEW()
@@ -24,4 +25,4 @@ FILE(GLOB OSVRClientTrackerSrc *.cpp)
 add_executable(OSVRClientTest
   ${OSVRClientTrackerSrc}
 )
-target_link_libraries(OSVRClientTest osvr::osvrClientKitCpp osvrRenderManager::osvrRenderManagerCpp  ${EIGEN3_LIBRARIES} ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} ${OSVR_LIBRARIES})
+target_link_libraries(OSVRClientTest osvr::osvrClientKitCpp osvrRenderManager::osvrRenderManagerCpp  ${EIGEN3_LIBRARIES} ${GLEW_LIBRARIES} ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES} ${OSVR_LIBRARIES})
