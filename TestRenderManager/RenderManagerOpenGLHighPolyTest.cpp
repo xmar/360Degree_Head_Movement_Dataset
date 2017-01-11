@@ -46,29 +46,118 @@
 // This must come after we include <GL/gl.h> so its pointer types are defined.
 #include <osvr/RenderKit/GraphicsLibraryOpenGL.h>
 #include <osvr/RenderKit/RenderKitGraphicsTransforms.h>
+#include <SOIL.h>
 
 // normally you'd load the shaders from a file, but in this case, let's
 // just keep things simple and load from memory.
 static const GLchar* vertexShader =
     "#version 330 core\n"
     "layout(location = 0) in vec3 position;\n"
-    "layout(location = 1) in vec3 vertexColor;\n"
-    "out vec3 fragmentColor;\n"
+    //"layout(location = 1) in vec3 vertexColor;\n"
+    "layout(location = 1) in vec2 vertexUV;\n"
+    //"out vec3 fragmentColor;\n"
+    "out vec2 UV;\n"
     "uniform mat4 modelView;\n"
     "uniform mat4 projection;\n"
     "void main()\n"
     "{\n"
     "   gl_Position = projection * modelView * vec4(position,1);\n"
-    "   fragmentColor = vertexColor;\n"
+    //"   fragmentColor = vertexColor;\n"
+    "   UV = vertexUV;\n"
     "}\n";
 
 static const GLchar* fragmentShader = "#version 330 core\n"
-                                      "in vec3 fragmentColor;\n"
+                                      //"in vec3 fragmentColor;\n"
+                                      "// Interpolated values from the vertex shaders\n"
+                                      "in vec2 UV;\n"
                                       "out vec3 color;\n"
+                                      "uniform sampler2D myTextureSampler;\n"
                                       "void main()\n"
                                       "{\n"
-                                      "    color = fragmentColor;\n"
+                                      //"    color = fragmentColor;\n"
+                                      "    color = texture( myTextureSampler, UV ).rgb;\n"
                                       "}\n";
+
+GLuint loadBMP_custom(const char * imagepath){
+
+	printf("Reading image %s\n", imagepath);
+
+	// Data read from the header of the BMP file
+	unsigned char header[54];
+	unsigned int dataPos;
+	unsigned int imageSize;
+	unsigned int width, height;
+	// Actual RGB data
+	unsigned char * data;
+
+	// Open the file
+	FILE * file = fopen(imagepath,"rb");
+	if (!file)							    {printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar(); return 0;}
+
+	// Read the header, i.e. the 54 first bytes
+
+	// If less than 54 bytes are read, problem
+	if ( fread(header, 1, 54, file)!=54 ){
+		printf("Not a correct BMP file\n");
+		return 0;
+	}
+	// A BMP files always begins with "BM"
+	if ( header[0]!='B' || header[1]!='M' ){
+		printf("Not a correct BMP file\n");
+		return 0;
+	}
+	// Make sure this is a 24bpp file
+	if ( *(int*)&(header[0x1E])!=0  )         {printf("Not a correct BMP file\n");    return 0;}
+	if ( *(int*)&(header[0x1C])!=24 )         {printf("Not a correct BMP file\n");    return 0;}
+
+	// Read the information about the image
+	dataPos    = *(int*)&(header[0x0A]);
+	imageSize  = *(int*)&(header[0x22]);
+	width      = *(int*)&(header[0x12]);
+	height     = *(int*)&(header[0x16]);
+
+	// Some BMP files are misformatted, guess missing information
+	if (imageSize==0)    imageSize=width*height*3; // 3 : one byte for each Red, Green and Blue component
+	if (dataPos==0)      dataPos=54; // The BMP header is done that way
+
+  std::cout << "image size: " << imageSize << "B" << std::endl;
+
+	// Create a buffer
+	data = new unsigned char [imageSize];
+
+	// Read the actual data from the file into the buffer
+	fread(data,1,imageSize,file);
+
+	// Everything is in memory now, the file wan be closed
+	fclose (file);
+
+	// Create one OpenGL texture
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+
+	// "Bind" the newly created texture : all future texture functions will modify this texture
+	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	// Give the image to OpenGL
+	glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
+
+	// OpenGL has now copied the data. Free our own version
+	delete [] data;
+
+	// Poor filtering, or ...
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	// ... nice trilinear filtering.
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	// Return the ID of the texture we just created
+	return textureID;
+}
 
 class SampleShader {
   public:
@@ -110,6 +199,7 @@ class SampleShader {
 
             projectionUniformId = glGetUniformLocation(programId, "projection");
             modelViewUniformId = glGetUniformLocation(programId, "modelView");
+            myTextureUniformId = glGetUniformLocation(programId, "myTextureSampler");
             initialized = true;
         }
     }
@@ -123,6 +213,25 @@ class SampleShader {
         convertMatrix(modelView, modelViewf);
         glUniformMatrix4fv(projectionUniformId, 1, GL_FALSE, projectionf);
         glUniformMatrix4fv(modelViewUniformId, 1, GL_FALSE, modelViewf);
+
+        // texture = SOIL_load_OGL_texture("/home/xcorbill/Documents/PhD/360_VR_tools/osvr_client/TestRenderManager/build/cubemap_sea_small2.bmp",
+        //                              SOIL_LOAD_AUTO,
+        //                              SOIL_CREATE_NEW_ID,
+        //                              SOIL_FLAG_POWER_OF_TWO | SOIL_FLAG_NTSC_SAFE_RGB
+        //                             );
+        // std::cout << "Here I am" << std::endl;
+        // if(texture == 0){
+        //     std::cerr << "[Texture loader] \""<< "cubemap_sea_small.png" << "\" failed to load!" << std::endl;
+        // }
+        if (texture == 0)
+        {
+          texture = loadBMP_custom("/home/xcorbill/Documents/PhD/360_VR_tools/osvr_client/TestRenderManager/build/cubemap_sea_small2.bmp");
+        }
+        glActiveTexture(GL_TEXTURE0);
+    		glBindTexture(GL_TEXTURE_2D, texture);
+        //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+        //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+        glUniform1i(myTextureUniformId,0);
     }
 
   private:
@@ -132,6 +241,8 @@ class SampleShader {
     GLuint programId = 0;
     GLuint projectionUniformId = 0;
     GLuint modelViewUniformId = 0;
+    GLuint myTextureUniformId = 0;
+    GLuint texture = 0;
 
     void checkShaderError(GLuint shaderId, const std::string& exceptionMsg) {
         GLint result = GL_FALSE;
@@ -187,6 +298,7 @@ class MeshCube {
       // adjust the coordinates by rotation to match each face.
       std::vector<GLfloat> whiteBufferData;
       std::vector<GLfloat> faceBufferData;
+      std::vector<GLfloat> tmpUVBufferData;
       for (size_t i = 0; i < numQuadsPerEdge; i++) {
         for (size_t j = 0; j < numQuadsPerEdge; j++) {
 
@@ -231,6 +343,10 @@ class MeshCube {
           faceBufferData.push_back(maxX);
           faceBufferData.push_back(minY);
           faceBufferData.push_back(Z);
+
+          auto tmptmpUVBufferData = getUVs(float(i)/float(numQuadsPerEdge), float(j)/float(numQuadsPerEdge));
+          tmpUVBufferData.insert(tmpUVBufferData.end(),
+            tmptmpUVBufferData.begin(), tmptmpUVBufferData.end());
         }
       }
 
@@ -251,6 +367,9 @@ class MeshCube {
         std::vector<GLfloat> myFaceBufferData =
           vertexRotate(faceBufferData, indices, scales);
 
+        //UV cubeMap
+        auto myUVBufferData =  transposeUVs(tmpUVBufferData, 0);
+
         // Catenate the colors onto the end of the
         // color buffer.
         colorBufferData.insert(colorBufferData.end(),
@@ -260,6 +379,11 @@ class MeshCube {
         // vertex buffer.
         vertexBufferData.insert(vertexBufferData.end(),
           myFaceBufferData.begin(), myFaceBufferData.end());
+
+        // Catenate the UVs onto the end of the
+        // UV buffer.
+        uvBufferData.insert(uvBufferData.end(),
+          myUVBufferData.begin(), myUVBufferData.end());
       }
 
       // -Z is cyan and is in the opposite size from the
@@ -275,6 +399,9 @@ class MeshCube {
         std::vector<GLfloat> myFaceBufferData =
           vertexRotate(faceBufferData, indices, scales);
 
+        //UV cubeMap
+        auto myUVBufferData = transposeUVs(tmpUVBufferData, 5);
+
         // Catenate the colors onto the end of the
         // color buffer.
         colorBufferData.insert(colorBufferData.end(),
@@ -284,6 +411,11 @@ class MeshCube {
         // vertex buffer.
         vertexBufferData.insert(vertexBufferData.end(),
           myFaceBufferData.begin(), myFaceBufferData.end());
+
+        // Catenate the UVs onto the end of the
+        // UV buffer.
+        uvBufferData.insert(uvBufferData.end(),
+          myUVBufferData.begin(), myUVBufferData.end());
       }
 
       // +X is red and is rotated -90 degrees from the original
@@ -299,6 +431,9 @@ class MeshCube {
         std::vector<GLfloat> myFaceBufferData =
           vertexRotate(faceBufferData, indices, scales);
 
+        //UV cubeMap
+        auto myUVBufferData = transposeUVs(tmpUVBufferData, 2);
+
         // Catenate the colors onto the end of the
         // color buffer.
         colorBufferData.insert(colorBufferData.end(),
@@ -308,6 +443,11 @@ class MeshCube {
         // vertex buffer.
         vertexBufferData.insert(vertexBufferData.end(),
           myFaceBufferData.begin(), myFaceBufferData.end());
+
+        // Catenate the UVs onto the end of the
+        // UV buffer.
+        uvBufferData.insert(uvBufferData.end(),
+          myUVBufferData.begin(), myUVBufferData.end());
       }
 
       // -X is magenta and is rotated 90 degrees from the original
@@ -323,6 +463,9 @@ class MeshCube {
         std::vector<GLfloat> myFaceBufferData =
           vertexRotate(faceBufferData, indices, scales);
 
+        //UV cubeMap
+        auto myUVBufferData = transposeUVs(tmpUVBufferData, 1);
+
         // Catenate the colors onto the end of the
         // color buffer.
         colorBufferData.insert(colorBufferData.end(),
@@ -332,6 +475,11 @@ class MeshCube {
         // vertex buffer.
         vertexBufferData.insert(vertexBufferData.end(),
           myFaceBufferData.begin(), myFaceBufferData.end());
+
+        // Catenate the UVs onto the end of the
+        // UV buffer.
+        uvBufferData.insert(uvBufferData.end(),
+          myUVBufferData.begin(), myUVBufferData.end());
       }
 
       // +Y is green and is rotated -90 degrees from the original
@@ -347,6 +495,9 @@ class MeshCube {
         std::vector<GLfloat> myFaceBufferData =
           vertexRotate(faceBufferData, indices, scales);
 
+        //UV cubeMap
+        auto myUVBufferData = transposeUVs(tmpUVBufferData, 3);
+
         // Catenate the colors onto the end of the
         // color buffer.
         colorBufferData.insert(colorBufferData.end(),
@@ -356,6 +507,11 @@ class MeshCube {
         // vertex buffer.
         vertexBufferData.insert(vertexBufferData.end(),
           myFaceBufferData.begin(), myFaceBufferData.end());
+
+        // Catenate the UVs onto the end of the
+        // UV buffer.
+        uvBufferData.insert(uvBufferData.end(),
+          myUVBufferData.begin(), myUVBufferData.end());
       }
 
       // -Y is yellow and is rotated 90 degrees from the original
@@ -371,6 +527,9 @@ class MeshCube {
         std::vector<GLfloat> myFaceBufferData =
           vertexRotate(faceBufferData, indices, scales);
 
+        //UV cubeMap
+        auto myUVBufferData = transposeUVs(tmpUVBufferData, 4);
+
         // Catenate the colors onto the end of the
         // color buffer.
         colorBufferData.insert(colorBufferData.end(),
@@ -380,6 +539,11 @@ class MeshCube {
         // vertex buffer.
         vertexBufferData.insert(vertexBufferData.end(),
           myFaceBufferData.begin(), myFaceBufferData.end());
+
+        // Catenate the UVs onto the end of the
+        // UV buffer.
+        uvBufferData.insert(uvBufferData.end(),
+          myUVBufferData.begin(), myUVBufferData.end());
       }
     }
 
@@ -408,13 +572,25 @@ class MeshCube {
                          &colorBufferData[0], GL_STATIC_DRAW);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+            // UV buffer
+            glGenBuffers(1, &uvBuffer);
+            glBindBuffer(GL_ARRAY_BUFFER, colorBuffer);
+            glBufferData(GL_ARRAY_BUFFER,
+                         sizeof(uvBufferData[0]) * uvBufferData.size(),
+                         &uvBufferData[0], GL_STATIC_DRAW);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+
             // Vertex array object
             glGenVertexArrays(1, &vertexArrayId);
             glBindVertexArray(vertexArrayId);
             {
-                // color
-                glBindBuffer(GL_ARRAY_BUFFER, colorBuffer);
-                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+                // // color
+                // glBindBuffer(GL_ARRAY_BUFFER, colorBuffer);
+                // glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+
+                // UV
+                glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
+                glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
                 // VBO
                 glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
@@ -447,9 +623,11 @@ class MeshCube {
     bool initialized = false;
     GLuint colorBuffer = 0;
     GLuint vertexBuffer = 0;
+    GLuint uvBuffer = 0;
     GLuint vertexArrayId = 0;
     std::vector<GLfloat> colorBufferData;
     std::vector<GLfloat> vertexBufferData;
+    std::vector<GLfloat> uvBufferData;
 
     // Multiply each triple of colors by the specified color.
     std::vector<GLfloat> colorModulate(std::vector<GLfloat> const &inVec,
@@ -488,6 +666,76 @@ class MeshCube {
       for (size_t i = 0; i < elements; i++) {
         for (size_t p = 0; p < 3; p++) {
           out[3 * i + p] = inVec[3*i + indices[p]] * scales[p];
+        }
+      }
+      return out;
+    }
+
+    // return UV map for each vertex of the quad of normalized index (i,j) for face f.
+    std::vector<GLfloat> getUVs(float i, float j) {
+      std::vector<GLfloat> out;
+      for (auto k = 0; k < 6; ++k)
+      {
+        out.push_back(i/4.f);
+        out.push_back(j/3.f);
+      }
+      return out;
+    }
+
+    std::vector<GLfloat> transposeUVs( std::vector<GLfloat> const& inputUVs, size_t faceId )
+    {
+      std::vector<GLfloat> out;
+      if (faceId >= 6)
+      {
+        return out;
+      }
+      out = inputUVs;
+      if (faceId == 0)
+      {
+        for (size_t i = 0; i < out.size(); i += 2)
+        {
+          out[i] = inputUVs[i] + 1.f/4.f;
+          out[i+1] = inputUVs[i+1] + 1.f/3.f;
+        }
+      }
+      else if (faceId == 1)
+      {
+        for (size_t i = 0; i < out.size(); i += 2)
+        {
+          out[i] = inputUVs[i] + 1.f/2.f;
+          out[i+1] = inputUVs[i+1] + 1.f/3.f;
+        }
+      }
+      else if (faceId == 2)
+      {
+        for (size_t i = 0; i < out.size(); i += 2)
+        {
+          out[i] = inputUVs[i];
+          out[i+1] = inputUVs[i+1] + 1.f/3.f;
+        }
+      }
+      else if (faceId == 3)
+      {
+        for (size_t i = 0; i < out.size(); i += 2)
+        {
+          out[i] = inputUVs[i] + 1.f/4.f;
+          out[i+1] = inputUVs[i+1];
+        }
+      }
+      else if (faceId == 4)
+      {
+        for (size_t i = 0; i < out.size(); i += 2)
+        {
+          out[i] = inputUVs[i] + 1.f/4.f;
+          out[i+1] = inputUVs[i+1] + 2.f/3.f;
+        }
+      }
+      else if (faceId == 5)
+      {
+        for (size_t i = 0; i < out.size(); i += 2)
+        {
+          out[i] = inputUVs[i] + 3.f/4.f;
+          out[i+1] = inputUVs[i+1] + 1.f/3.f;
         }
       }
       return out;
@@ -572,8 +820,8 @@ void SetupDisplay(
     osvr::renderkit::GraphicsLibraryOpenGL* glLibrary = library.OpenGL;
 
     // Clear the screen to black and clear depth
-    glClearColor(0, 0, 0, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClearColor(0.8f, 0, 0.1f, 1.0f);
 }
 
 // Callback to set up for rendering into a given eye (viewpoint and projection).
