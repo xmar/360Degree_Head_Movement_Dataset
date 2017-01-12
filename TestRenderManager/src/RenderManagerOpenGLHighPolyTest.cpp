@@ -41,6 +41,7 @@
 #include <iostream>
 #include <string>
 #include <memory>
+#include <chrono>
 #include <stdlib.h> // For exit()
 
 // This must come after we include <GL/gl.h> so its pointer types are defined.
@@ -301,9 +302,8 @@ int main(int argc, char* argv[]) {
     glGetError();
 
     // Frame timing
-    // size_t countFrames = 0;
-    // struct timeval startFrames;
-    // vrpn_gettimeofday(&startFrames, nullptr);
+    size_t countFrames = 0;
+    auto startTime = std::chrono::system_clock::now();
 
     // Continue rendering until it is time to quit.
     while (!quit) {
@@ -319,16 +319,17 @@ int main(int argc, char* argv[]) {
         }
 
         // Print timing info
-        // struct timeval nowFrames;
-        // vrpn_gettimeofday(&nowFrames, nullptr);
-        // double duration = vrpn_TimevalDurationSeconds(nowFrames, startFrames);
-        // countFrames++;
-        // if (duration >= 2.0) {
-        //   std::cout << "Rendering at " << countFrames / duration << " fps"
-        //     << std::endl;
-        //   startFrames = nowFrames;
-        //   countFrames = 0;
-        // }
+        auto nowTime = std::chrono::system_clock::now();
+        auto duration = nowTime-startTime;
+        ++countFrames;
+        constexpr std::chrono::seconds twoSeconds(2);
+        if (duration >= twoSeconds)
+        {
+          std::cout << "\033[2K\r" << "Rendering at " << countFrames / std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count()
+            << " fps" << std::flush;
+          startTime = nowTime;
+          countFrames = 0;
+        }
     }
 
     // Close the Renderer interface cleanly.
