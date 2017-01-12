@@ -35,6 +35,9 @@
 #include <windows.h>
 #endif
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 
 #include <GL/glew.h>
 
@@ -223,9 +226,47 @@ class SampleShader {
         // if(texture == 0){
         //     std::cerr << "[Texture loader] \""<< "cubemap_sea_small.png" << "\" failed to load!" << std::endl;
         // }
-        if (texture == 0)
+        // if (texture == 0)
+        // {
+        //   texture = loadBMP_custom("/home/xcorbill/Documents/PhD/360_VR_tools/osvr_client/TestRenderManager/build/cubemap_sea_small2.bmp");
+        // }
+        if(texture == 0)
         {
-          texture = loadBMP_custom("/home/xcorbill/Documents/PhD/360_VR_tools/osvr_client/TestRenderManager/build/cubemap_sea_small2.bmp");
+          std::cout << "Load texture " << std::endl;
+          int w;
+          int h;
+          int comp;
+          unsigned char* image = stbi_load("skybox_cubemap.png", &w, &h, &comp, 0);
+          if(image == nullptr)
+          {
+            throw(std::string("Failed to load texture"));
+          }
+          glGenTextures(1, &texture);
+          glBindTexture(GL_TEXTURE_2D, texture);
+
+          // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+          // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+          std::cout << "Loaded with " << comp << " comp" << std::endl;
+
+          if(comp == 3)
+          {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+          }
+          else if(comp == 4)
+          {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+          }
+
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        	glGenerateMipmap(GL_TEXTURE_2D);
+
+          glBindTexture(GL_TEXTURE_2D, 0);
+          stbi_image_free(image);
+          std::cout << "Texture loaded" << std::endl;
         }
         glActiveTexture(GL_TEXTURE0);
     		glBindTexture(GL_TEXTURE_2D, texture);
@@ -574,7 +615,7 @@ class MeshCube {
 
             // UV buffer
             glGenBuffers(1, &uvBuffer);
-            glBindBuffer(GL_ARRAY_BUFFER, colorBuffer);
+            glBindBuffer(GL_ARRAY_BUFFER, uvBuffer);
             glBufferData(GL_ARRAY_BUFFER,
                          sizeof(uvBufferData[0]) * uvBufferData.size(),
                          &uvBufferData[0], GL_STATIC_DRAW);
