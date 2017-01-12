@@ -35,9 +35,9 @@ public:
   const auto& GetVertexBufferId(void) const {return m_vertexBufferId;}
   const auto& GetUvBufferId(void) const {return m_uvBufferId;}
 
-  void AppendVertexBufferData(std::vector<GLfloat> newData) {m_vertexBufferData.insert(m_vertexBufferData.end(),
+  void AppendVertexBufferData(std::vector<GLfloat> const& newData) {m_vertexBufferData.insert(m_vertexBufferData.end(),
     newData.begin(), newData.end());}
-  void AppendUvBufferData(std::vector<GLfloat> newData) {m_uvBufferData.insert(m_uvBufferData.end(),
+  void AppendUvBufferData(std::vector<GLfloat> const& newData) {m_uvBufferData.insert(m_uvBufferData.end(),
     newData.begin(), newData.end());}
 
 private:

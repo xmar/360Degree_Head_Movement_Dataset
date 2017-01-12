@@ -49,14 +49,14 @@
 #include <osvr/RenderKit/RenderKitGraphicsTransforms.h>
 
 //Internal Includes
-#include "MeshCube.hpp"
+#include "MeshCubeEquiUV.hpp"
 #include "Shader.hpp"
 
 using namespace IMT;
 
-static std::shared_ptr<Shader> sampleShader = std::make_shared<Shader>("skybox_cubemap.png");//"test.png");
+static std::shared_ptr<Shader> sampleShader = std::make_shared<Shader>("equi.jpg");//"test.png");
 
-static MeshCube* roomCube = nullptr;
+static MeshCubeEquiUV* roomCube = nullptr;
 
 // Set to true when it is time for the application to quit.
 // Handlers below that set it to true when the user causes
@@ -238,7 +238,7 @@ int main(int argc, char* argv[]) {
     }
     size_t triangles = static_cast<size_t>(
       trianglesPerSide * 6);
-    roomCube = new MeshCube(5.0, triangles);
+    roomCube = new MeshCubeEquiUV(50.0, triangles);
     std::cout << "Rendering " << trianglesPerSide << " triangles per cube face" << std::endl;
     std::cout << "Rendering " << triangles << " triangles total" << std::endl;
 
