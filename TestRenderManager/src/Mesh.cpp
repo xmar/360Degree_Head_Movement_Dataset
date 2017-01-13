@@ -1,7 +1,7 @@
 //Author: Xavier Corbillon
 //IMT Atlantique
 #include "Mesh.hpp"
-#include "Shader.hpp"
+#include "ShaderTexture.hpp"
 
 using namespace IMT;
 
@@ -16,7 +16,7 @@ Mesh::~Mesh(void)
   }
 }
 
-void Mesh::Draw(const GLdouble projection[], const GLdouble modelView[], std::shared_ptr<Shader> shader)
+void Mesh::Draw(const GLdouble projection[], const GLdouble modelView[], std::shared_ptr<ShaderTexture> shader)
 {
     Init();
 

@@ -2,11 +2,9 @@
 // IMT Atlantique
 //
 // Description:
-// Shader class
+// Virtual class that implement a shader to read color for one texture (with UVs)
+// And apply viewport rotations
 #pragma once
-
-//internal includes
-#include "stb_image.h"
 
 //standard includes
 #include <iostream>
@@ -50,18 +48,28 @@ static const GLchar* fragmentShader = "#version 330 core\n"
                                       "    color = texture( myTextureSampler, UV ).rgb;\n"
                                       "}\n";
 
-class Shader {
+class ShaderTexture {
   public:
-    Shader(std::string pathToTexture): m_pathToTexture(pathToTexture) {}
+    ShaderTexture(void): m_initialized(false), m_programId(0),
+      m_projectionUniformId(0), m_modelViewUniformId(0), m_myTextureUniformId(0),
+      m_textureId(0) {}
 
-    ~Shader() {
-        if (initialized) {
-            glDeleteProgram(programId);
+    virtual ~ShaderTexture()
+    {
+        if (m_initialized)
+        {
+            glDeleteProgram(m_programId);
+        }
+        if (m_textureId != 0)
+        {
+          glDeleteTextures(1, &m_textureId);
         }
     }
 
-    void init() {
-        if (!initialized) {
+    void init()
+    {
+        if (!m_initialized)
+        {
             GLuint vertexShaderId = glCreateShader(GL_VERTEX_SHADER);
             GLuint fragmentShaderId = glCreateShader(GL_FRAGMENT_SHADER);
 
@@ -78,117 +86,97 @@ class Shader {
                              "Fragment shader compilation failed.");
 
             // linking program
-            programId = glCreateProgram();
-            glAttachShader(programId, vertexShaderId);
-            glAttachShader(programId, fragmentShaderId);
-            glLinkProgram(programId);
-            checkProgramError(programId, "Shader program link failed.");
+            m_programId = glCreateProgram();
+            glAttachShader(m_programId, vertexShaderId);
+            glAttachShader(m_programId, fragmentShaderId);
+            glLinkProgram(m_programId);
+            checkProgramError(m_programId, "Shader program link failed.");
 
             // once linked into a program, we no longer need the shaders.
             glDeleteShader(vertexShaderId);
             glDeleteShader(fragmentShaderId);
 
-            projectionUniformId = glGetUniformLocation(programId, "projection");
-            modelViewUniformId = glGetUniformLocation(programId, "modelView");
-            myTextureUniformId = glGetUniformLocation(programId, "myTextureSampler");
-            initialized = true;
+            m_projectionUniformId = glGetUniformLocation(m_programId, "projection");
+            m_modelViewUniformId = glGetUniformLocation(m_programId, "modelView");
+            m_myTextureUniformId = glGetUniformLocation(m_programId, "myTextureSampler");
+            m_initialized = true;
         }
     }
 
-    void useProgram(const GLdouble projection[], const GLdouble modelView[]) {
+    void useProgram(const GLdouble projection[], const GLdouble modelView[])
+    {
         init();
-        glUseProgram(programId);
+        glUseProgram(m_programId);
         GLfloat projectionf[16];
         GLfloat modelViewf[16];
         convertMatrix(projection, projectionf);
         convertMatrix(modelView, modelViewf);
-        glUniformMatrix4fv(projectionUniformId, 1, GL_FALSE, projectionf);
-        glUniformMatrix4fv(modelViewUniformId, 1, GL_FALSE, modelViewf);
+        glUniformMatrix4fv(m_projectionUniformId, 1, GL_FALSE, projectionf);
+        glUniformMatrix4fv(m_modelViewUniformId, 1, GL_FALSE, modelViewf);
 
-        if(texture == 0)
-        {
-          std::cout << "Load texture " << std::endl;
-          int w;
-          int h;
-          int comp;
-          unsigned char* image = stbi_load(m_pathToTexture.c_str(), &w, &h, &comp, 0);
-          if(image == nullptr)
-          {
-            throw(std::string("Failed to load texture"));
-          }
-          glGenTextures(1, &texture);
-          glBindTexture(GL_TEXTURE_2D, texture);
-
-          std::cout << "Loaded with " << comp << " comp" << std::endl;
-
-          if(comp == 3)
-          {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
-          }
-          else if(comp == 4)
-          {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
-          }
-
-          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
-        	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        	glGenerateMipmap(GL_TEXTURE_2D);
-
-          glBindTexture(GL_TEXTURE_2D, 0);
-          stbi_image_free(image);
-          std::cout << "Texture loaded" << std::endl;
-        }
+        UpdateTexture();
         glActiveTexture(GL_TEXTURE0);
-    		glBindTexture(GL_TEXTURE_2D, texture);
+    		glBindTexture(GL_TEXTURE_2D, m_textureId);
         //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
         //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-        glUniform1i(myTextureUniformId,0);
+        glUniform1i(m_myTextureUniformId,0);
     }
 
-  private:
-    Shader(const Shader&) = delete;
-    Shader& operator=(const Shader&) = delete;
-    bool initialized = false;
-    GLuint programId = 0;
-    GLuint projectionUniformId = 0;
-    GLuint modelViewUniformId = 0;
-    GLuint myTextureUniformId = 0;
-    GLuint texture = 0;
-    std::string m_pathToTexture;
+  protected:
+    const auto& GetTextureId(void) const {return m_textureId;}
+    auto& GetTextureId(void) {return m_textureId;}
 
-    void checkShaderError(GLuint shaderId, const std::string& exceptionMsg) {
+  private:
+    ShaderTexture(const ShaderTexture&) = delete;
+    ShaderTexture& operator=(const ShaderTexture&) = delete;
+    bool m_initialized;
+    GLuint m_programId;
+    GLuint m_projectionUniformId = 0;
+    GLuint m_modelViewUniformId = 0;
+    GLuint m_myTextureUniformId = 0;
+    GLuint m_textureId = 0;
+
+    //Update content of openGl m_textureId object
+    virtual void UpdateTexture(void) = 0;
+
+    void checkShaderError(GLuint shaderId, const std::string& exceptionMsg)
+    {
         GLint result = GL_FALSE;
         int infoLength = 0;
         glGetShaderiv(shaderId, GL_COMPILE_STATUS, &result);
         glGetShaderiv(shaderId, GL_INFO_LOG_LENGTH, &infoLength);
-        if (result == GL_FALSE) {
+        if (result == GL_FALSE)
+        {
             std::vector<GLchar> errorMessage(infoLength + 1);
-            glGetProgramInfoLog(programId, infoLength, NULL, &errorMessage[0]);
+            glGetProgramInfoLog(m_programId, infoLength, NULL, &errorMessage[0]);
             std::cerr << &errorMessage[0] << std::endl;
             throw std::runtime_error(exceptionMsg);
         }
     }
 
-    void checkProgramError(GLuint programId, const std::string& exceptionMsg) {
+    void checkProgramError(GLuint m_programId, const std::string& exceptionMsg)
+    {
         GLint result = GL_FALSE;
         int infoLength = 0;
-        glGetProgramiv(programId, GL_LINK_STATUS, &result);
-        glGetProgramiv(programId, GL_INFO_LOG_LENGTH, &infoLength);
-        if (result == GL_FALSE) {
+        glGetProgramiv(m_programId, GL_LINK_STATUS, &result);
+        glGetProgramiv(m_programId, GL_INFO_LOG_LENGTH, &infoLength);
+        if (result == GL_FALSE)
+        {
             std::vector<GLchar> errorMessage(infoLength + 1);
-            glGetProgramInfoLog(programId, infoLength, NULL, &errorMessage[0]);
+            glGetProgramInfoLog(m_programId, infoLength, NULL, &errorMessage[0]);
             std::cerr << &errorMessage[0] << std::endl;
             throw std::runtime_error(exceptionMsg);
         }
     }
 
-    void convertMatrix(const GLdouble source[], GLfloat dest_out[]) {
-        if (nullptr == source || nullptr == dest_out) {
+    void convertMatrix(const GLdouble source[], GLfloat dest_out[])
+    {
+        if (nullptr == source || nullptr == dest_out)
+        {
             throw new std::logic_error("source and dest_out must be non-null.");
         }
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 16; i++)
+        {
             dest_out[i] = (GLfloat)source[i];
         }
     }

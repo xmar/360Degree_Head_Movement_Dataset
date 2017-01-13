@@ -50,11 +50,11 @@
 
 //Internal Includes
 #include "MeshCubeEquiUV.hpp"
-#include "Shader.hpp"
+#include "ShaderTextureStatic.hpp"
 
 using namespace IMT;
 
-static std::shared_ptr<Shader> sampleShader = std::make_shared<Shader>("equi.jpg");//"test.png");
+static std::shared_ptr<ShaderTexture> sampleShader = std::make_shared<ShaderTextureStatic>("equi.jpg");//"test.png");
 
 static MeshCubeEquiUV* roomCube = nullptr;
 

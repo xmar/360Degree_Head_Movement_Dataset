@@ -19,7 +19,7 @@ namespace IMT
 {
 
 //Forward declaration
-class Shader;
+class ShaderTexture;
 
 class Mesh
 {
@@ -28,7 +28,7 @@ public:
       m_vertexArrayId(0), m_vertexBufferData(), m_uvBufferData() {}
   virtual ~Mesh(void);
 
-  void Draw(const GLdouble projection[], const GLdouble modelView[], std::shared_ptr<Shader> shader);
+  void Draw(const GLdouble projection[], const GLdouble modelView[], std::shared_ptr<ShaderTexture> shader);
 
   void Init(void);
 
