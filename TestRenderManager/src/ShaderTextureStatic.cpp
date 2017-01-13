@@ -8,7 +8,7 @@
 
 using namespace IMT;
 
-void ShaderTextureStatic::UpdateTexture(void)
+void ShaderTextureStatic::UpdateTexture(std::chrono::system_clock::time_point deadline)
 {
   auto& textureId = GetTextureId();
   if(textureId == 0)

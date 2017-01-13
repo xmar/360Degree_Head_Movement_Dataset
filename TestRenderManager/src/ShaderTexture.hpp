@@ -9,6 +9,7 @@
 //standard includes
 #include <iostream>
 #include <vector>
+#include <chrono>
 
 // Library/third-party includes
 #include <GL/glew.h>
@@ -103,7 +104,7 @@ class ShaderTexture {
         }
     }
 
-    void useProgram(const GLdouble projection[], const GLdouble modelView[])
+    void useProgram(const GLdouble projection[], const GLdouble modelView[], std::chrono::system_clock::time_point deadline)
     {
         init();
         glUseProgram(m_programId);
@@ -114,7 +115,7 @@ class ShaderTexture {
         glUniformMatrix4fv(m_projectionUniformId, 1, GL_FALSE, projectionf);
         glUniformMatrix4fv(m_modelViewUniformId, 1, GL_FALSE, modelViewf);
 
-        UpdateTexture();
+        UpdateTexture(std::move(deadline));
         glActiveTexture(GL_TEXTURE0);
     		glBindTexture(GL_TEXTURE_2D, m_textureId);
         //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
@@ -137,7 +138,7 @@ class ShaderTexture {
     GLuint m_textureId = 0;
 
     //Update content of openGl m_textureId object
-    virtual void UpdateTexture(void) = 0;
+    virtual void UpdateTexture(std::chrono::system_clock::time_point deadline) = 0;
 
     void checkShaderError(GLuint shaderId, const std::string& exceptionMsg)
     {

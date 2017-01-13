@@ -16,11 +16,13 @@ Mesh::~Mesh(void)
   }
 }
 
-void Mesh::Draw(const GLdouble projection[], const GLdouble modelView[], std::shared_ptr<ShaderTexture> shader)
+void Mesh::Draw(const GLdouble projection[], const GLdouble modelView[],
+                std::shared_ptr<ShaderTexture> shader,
+                std::chrono::system_clock::time_point deadline)
 {
     Init();
 
-    shader->useProgram(projection, modelView);
+    shader->useProgram(projection, modelView, std::move(deadline));
 
     glBindVertexArray(m_vertexArrayId);
     {

@@ -14,6 +14,7 @@
 //standard includes
 #include <memory>
 #include <vector>
+#include <chrono>
 
 namespace IMT
 {
@@ -28,7 +29,9 @@ public:
       m_vertexArrayId(0), m_vertexBufferData(), m_uvBufferData() {}
   virtual ~Mesh(void);
 
-  void Draw(const GLdouble projection[], const GLdouble modelView[], std::shared_ptr<ShaderTexture> shader);
+  void Draw(const GLdouble projection[], const GLdouble modelView[],
+          std::shared_ptr<ShaderTexture> shader,
+          std::chrono::system_clock::time_point deadline);
 
   void Init(void);
 

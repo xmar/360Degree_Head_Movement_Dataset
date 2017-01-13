@@ -51,10 +51,12 @@
 //Internal Includes
 #include "MeshCubeEquiUV.hpp"
 #include "ShaderTextureStatic.hpp"
+#include "ShaderTextureVideo.hpp"
 
 using namespace IMT;
 
-static std::shared_ptr<ShaderTexture> sampleShader = std::make_shared<ShaderTextureStatic>("equi.jpg");//"test.png");
+//static std::shared_ptr<ShaderTexture> sampleShader = std::make_shared<ShaderTextureStatic>("equi.jpg");//"test.png");
+static std::shared_ptr<ShaderTexture> sampleShader = std::make_shared<ShaderTextureVideo>("car_equirectangular_4k.mkv");
 
 static MeshCubeEquiUV* roomCube = nullptr;
 
@@ -204,8 +206,12 @@ void DrawWorld(
     GLdouble viewGL[16];
     osvr::renderkit::OSVR_PoseState_to_OpenGL(viewGL, pose);
 
+    std::chrono::system_clock::time_point deadlineTP(
+                                        std::chrono::seconds{deadline.seconds} +
+                                        std::chrono::microseconds{deadline.microseconds} );
+
     /// Draw a cube with a 5-meter radius as the room we are floating in.
-    roomCube->Draw(projectionGL, viewGL, sampleShader);
+    roomCube->Draw(projectionGL, viewGL, sampleShader, std::move(deadlineTP));
 }
 
 void Usage(std::string name) {
@@ -238,7 +244,7 @@ int main(int argc, char* argv[]) {
     }
     size_t triangles = static_cast<size_t>(
       trianglesPerSide * 6);
-    roomCube = new MeshCubeEquiUV(50.0, triangles);
+    roomCube = new MeshCubeEquiUV(5.0, triangles);
     std::cout << "Rendering " << trianglesPerSide << " triangles per cube face" << std::endl;
     std::cout << "Rendering " << triangles << " triangles total" << std::endl;
 

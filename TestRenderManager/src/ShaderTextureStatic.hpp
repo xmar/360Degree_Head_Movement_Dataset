@@ -17,7 +17,7 @@ public:
 private:
   std::string m_pathToTexture;
 
-  virtual void UpdateTexture(void) override;
+  virtual void UpdateTexture(std::chrono::system_clock::time_point deadline) override;
 };
 
 }
