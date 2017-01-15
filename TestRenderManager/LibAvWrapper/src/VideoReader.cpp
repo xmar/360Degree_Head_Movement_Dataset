@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <Packet.hpp>
+#include <stdexcept>
 
 #define DEBUG_VideoReader 0
 #if DEBUG_VideoReader
@@ -114,12 +115,16 @@ void VideoReader::Init(unsigned nbFrames)
     printA(m_fmt_ctx);
 
     PRINT_DEBUG_VideoReader("Init video stream decoders");
+    if (m_fmt_ctx->nb_streams > 1)
+    {
+      throw(std::invalid_argument("Support only video with one video stream"));
+    }
     for (unsigned i = 0; i < m_fmt_ctx->nb_streams; ++i)
     {
         if(m_fmt_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO)
         {
             m_fmt_ctx->streams[i]->codec->refcounted_frames = 1;
-            m_outputFrames.emplace_back();
+            //m_outputFrames.emplace_back();
             m_streamIdToVecId[i] = m_videoStreamIds.size();
             m_videoStreamIds.push_back(i);
             auto* decoder = avcodec_find_decoder(m_fmt_ctx->streams[i]->codec->codec_id);
@@ -134,19 +139,20 @@ void VideoReader::Init(unsigned nbFrames)
             }
         }
     }
-    m_doneVect = std::vector<bool>(m_outputFrames.size(), false);
-    m_gotOne = std::vector<bool>(m_outputFrames.size(), false);
+    m_outputFrames.SetTotal(nbFrames);
+    m_doneVect = std::vector<bool>(1, false);
+    m_gotOne = std::vector<bool>(1, false);
 }
 
-static bool AllDone(const std::vector<bool>& vect)
-{
-    bool r = true;
-    for (auto b: vect)
-    {
-        r &= b;
-    }
-    return r;
-}
+// static bool AllDone(const std::vector<bool>& vect)
+// {
+//     bool r = true;
+//     for (auto b: vect)
+//     {
+//         r &= b;
+//     }
+//     return r;
+// }
 
 // static std::shared_ptr<cv::Mat> ToMat(AVCodecContext* codecCtx, AVFrame* frame_ptr)
 // {
@@ -173,12 +179,12 @@ static bool AllDone(const std::vector<bool>& vect)
 //     return returnMat;
 // }
 
-void VideoReader::DecodeNextStep(void)
+void VideoReader::RunDecoderThread(void)
 {
     AVPacket pkt;
     int ret = -1;
     PRINT_DEBUG_VideoReader("Read next pkt")
-    if ((ret = av_read_frame(m_fmt_ctx, &pkt)) >= 0)
+    while ((ret = av_read_frame(m_fmt_ctx, &pkt)) >= 0)
     {
         unsigned streamId = pkt.stream_index;
         if (m_streamIdToVecId.count(streamId) > 0 && !m_doneVect[m_streamIdToVecId[streamId]])
@@ -201,7 +207,11 @@ void VideoReader::DecodeNextStep(void)
                   {
                       PRINT_DEBUG_VideoReader("Got a frame for streamId " <<streamId)
                       m_gotOne[m_streamIdToVecId[streamId]] = true;
-                      m_outputFrames[m_streamIdToVecId[streamId]].push(std::move(frame));
+                      //m_outputFrames[m_streamIdToVecId[streamId]].push(std::move(frame));
+                      if (!m_outputFrames.Add(std::move(frame)))
+                      {
+                        return;
+                      }
                   }
                   else
                   {
@@ -210,22 +220,20 @@ void VideoReader::DecodeNextStep(void)
                   }
                 }
             }
-            m_doneVect[m_streamIdToVecId[streamId]] = (m_gotOne[m_streamIdToVecId[streamId]] && (!got_a_frame)) || (m_outputFrames[m_streamIdToVecId[streamId]].size() >= m_nbFrames);
+            //m_doneVect[m_streamIdToVecId[streamId]] = (m_gotOne[m_streamIdToVecId[streamId]] && (!got_a_frame)) || (m_outputFrames[m_streamIdToVecId[streamId]].size() >= m_nbFrames);
         }
         av_packet_unref(&pkt);
-        return;
     }
-    else
     { //flush all the rest
         PRINT_DEBUG_VideoReader("Start to flush")
         unsigned streamVectId = 0;
-        for (auto i = 0; i < m_outputFrames.size(); ++i)
+        for (auto i = 0; i < 1; ++i)
         {
           //send flush signal
           PRINT_DEBUG_VideoReader("Send flush signal for streamId "<<i)
           avcodec_send_packet(m_fmt_ctx->streams[m_videoStreamIds[i]]->codec, nullptr);
         }
-        while(!AllDone(m_doneVect))
+        while(true)//we decode all the reste of the frames
         {
             if (!m_doneVect[streamVectId])
             {
@@ -239,11 +247,18 @@ void VideoReader::DecodeNextStep(void)
                 if (got_a_frame)
                 {
                     PRINT_DEBUG_VideoReader("Got a frame for streamVectId "<<streamVectId)
-                    m_outputFrames[streamVectId].push(std::move(frame));
+                    if(!m_outputFrames.Add(std::move(frame)))
+                    {
+                      return;
+                    }
                     //m_outputFrames[streamVectId].emplace();
                 }
-                m_doneVect[streamVectId] = (!got_a_frame) || (m_outputFrames[streamVectId].size() >= m_nbFrames);
-                streamVectId = (streamVectId + 1) % m_outputFrames.size();
+                else
+                {
+                  return;
+                }
+                //m_doneVect[streamVectId] = (!got_a_frame) || (m_outputFrames[streamVectId].size() >= m_nbFrames);
+                //streamVectId = (streamVectId + 1) % m_outputFrames.size();
             }
         }
     }
@@ -259,9 +274,9 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
       m_startDisplayTime = now;
     }
     auto timeSinceStartDisplay = now - m_startDisplayTime;
-    if (streamId < m_outputFrames.size())
+    if (streamId < 1)
     {
-        if (!m_outputFrames[streamId].empty())
+        if (!m_outputFrames.IsAllDones())
         {
             PRINT_DEBUG_VideoReader("Forward next picture for streamId "<<streamId)
             // auto matPtr = m_outputFrames[streamId].front();
@@ -269,75 +284,64 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
             // return matPtr;
             std::shared_ptr<Frame> frame(nullptr);
             bool done = false;
-            size_t sizeInit = m_outputFrames[streamId].size();
+            size_t nbUsed = 0;
             while(!done)
             {
-              auto tmp_frame = m_outputFrames[streamId].front();
-              if (timeSinceStartDisplay >= std::chrono::milliseconds(tmp_frame->GetDisplayTimestamp()))
+              auto tmp_frame = m_outputFrames.Get();
+              if (tmp_frame != nullptr)
               {
-                frame = tmp_frame;
-                m_outputFrames[streamId].pop();
-                done = m_outputFrames[streamId].empty();
+                if (timeSinceStartDisplay >= std::chrono::milliseconds(tmp_frame->GetDisplayTimestamp()))
+                {
+                  frame = std::move(tmp_frame);
+                  ++nbUsed;
+                }
+                else
+                {
+                  done = true;
+                }
               }
               else
               {
                 done = true;
               }
+
             }
-            size_t nbUsed = sizeInit-m_outputFrames[streamId].size();
+
             if (nbUsed > 1)
             {
               std::cout << "Nb dropped frame: " << nbUsed-1 << std::endl;
             }
-            if (frame != nullptr)
+            if (frame != nullptr && frame->IsValid())
             {
-              if (frame->IsValid())
+              auto w = frame->GetWidth();
+              auto h = frame->GetHeight();
+              if (m_swsCtx == nullptr)
               {
-                auto w = frame->GetWidth();
-                auto h = frame->GetHeight();
-                if (m_swsCtx == nullptr)
-                {
-                  m_swsCtx = sws_getContext(w, h,
-                                    AV_PIX_FMT_YUV420P, w, h,
-                                    AV_PIX_FMT_RGB24, 0, 0, 0, 0);
-                  m_frame_ptr2 = av_frame_alloc();
-                  av_image_alloc(m_frame_ptr2->data, m_frame_ptr2->linesize, w, h, AV_PIX_FMT_BGR24, 1);
-                }
-                //transform from YUV420p domain to RGB domain
-                sws_scale(m_swsCtx, frame->GetDataPtr(), frame->GetRowLength(), 0, h, m_frame_ptr2->data, m_frame_ptr2->linesize);
-
-                if (first)
-                {
-                  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, m_frame_ptr2->data[0]);
-                }
-                else
-                {
-                  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, m_frame_ptr2->data[0]);
-                }
-
-
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-                glGenerateMipmap(GL_TEXTURE_2D);
+                m_swsCtx = sws_getContext(w, h,
+                                  AV_PIX_FMT_YUV420P, w, h,
+                                  AV_PIX_FMT_RGB24, 0, 0, 0, 0);
+                m_frame_ptr2 = av_frame_alloc();
+                av_image_alloc(m_frame_ptr2->data, m_frame_ptr2->linesize, w, h, AV_PIX_FMT_BGR24, 1);
               }
-              //m_outputFrames[streamId].pop();
-            }
-            else if (m_outputFrames[streamId].empty())
-            {
-              SetNextPictureToOpenGLTexture(streamId, deadline);
-            }
+              //transform from YUV420p domain to RGB domain
+              sws_scale(m_swsCtx, frame->GetDataPtr(), frame->GetRowLength(), 0, h, m_frame_ptr2->data, m_frame_ptr2->linesize);
 
-        }
-        else if (!AllDone(m_doneVect))
-        {
-            PRINT_DEBUG_VideoReader("Read next few pkt/frames")
-            for (auto i = 0; i < 50 && !AllDone(m_doneVect); ++i)
-            {
-                DecodeNextStep();
+              if (first)
+              {
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, m_frame_ptr2->data[0]);
+              }
+              else
+              {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, m_frame_ptr2->data[0]);
+              }
+
+
+              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+              glGenerateMipmap(GL_TEXTURE_2D);
             }
-            return SetNextPictureToOpenGLTexture(streamId, deadline);
         }
     }
     return;

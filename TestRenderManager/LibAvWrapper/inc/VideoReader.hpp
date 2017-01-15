@@ -15,6 +15,8 @@ extern "C"
     #include <libswscale/swscale.h>
 }
 
+#include "Buffer.hpp"
+
 namespace IMT {
 namespace LibAv {
 
@@ -47,7 +49,8 @@ class VideoReader
         std::map<unsigned int, unsigned int> m_streamIdToVecId;
         //First version: we totaly decode the video and store in a vector the output frames
         //std::vector<std::queue<std::shared_ptr<cv::Mat>>> m_outputFrames;
-        std::vector<std::queue<std::shared_ptr<Frame>>> m_outputFrames;
+        //std::vector<std::queue<std::shared_ptr<Frame>>> m_outputFrames;
+        IMT::Buffer<Frame, 10> m_outputFrames;
         unsigned m_nbFrames;
         std::vector<bool> m_doneVect;
         std::vector<bool> m_gotOne;
@@ -55,7 +58,7 @@ class VideoReader
         struct SwsContext* m_swsCtx;
         AVFrame* m_frame_ptr2;
 
-        void DecodeNextStep(void);
+        void RunDecoderThread(void);
 };
 }
 }
