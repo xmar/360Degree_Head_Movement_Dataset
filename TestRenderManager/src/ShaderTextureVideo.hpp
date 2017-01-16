@@ -15,7 +15,7 @@ class ShaderTextureVideo: public ShaderTexture
 public:
   ShaderTextureVideo(std::string pathToVideo): ShaderTexture(),
       m_pathToVideo(pathToVideo), m_videoReader(pathToVideo)
-      {m_videoReader.Init(100);}
+      {m_videoReader.Init(100000);}
   virtual ~ShaderTextureVideo(void) = default;
 private:
   std::string m_pathToVideo;

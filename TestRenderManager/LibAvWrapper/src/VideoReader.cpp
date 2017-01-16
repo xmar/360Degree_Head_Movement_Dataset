@@ -28,12 +28,19 @@ using namespace IMT::LibAv;
 
 VideoReader::VideoReader(std::string inputPath): m_inputPath(inputPath), m_fmt_ctx(nullptr), m_videoStreamIds(),
     m_outputFrames(), m_streamIdToVecId(), m_nbFrames(0), m_doneVect(), m_gotOne(), m_startDisplayTime(std::chrono::system_clock::now()),
-    m_swsCtx(nullptr), m_frame_ptr2(nullptr)
+    m_swsCtx(nullptr), m_frame_ptr2(nullptr), m_decodingThread()
 {
 }
 
 VideoReader::~VideoReader()
 {
+  if (m_decodingThread.joinable())
+  {
+    std::cout << "Join decoding thread\n";
+    m_outputFrames.Stop();
+    m_decodingThread.join();
+    std::cout << "Join decoding thread: done\n";
+  }
   if (m_fmt_ctx != nullptr)
   {
     for (unsigned i = 0; i < m_fmt_ctx->nb_streams; ++i)
@@ -142,6 +149,9 @@ void VideoReader::Init(unsigned nbFrames)
     m_outputFrames.SetTotal(nbFrames);
     m_doneVect = std::vector<bool>(1, false);
     m_gotOne = std::vector<bool>(1, false);
+
+    std::cout << "Start decoding thread\n";
+    m_decodingThread = std::thread(&VideoReader::RunDecoderThread, this);
 }
 
 // static bool AllDone(const std::vector<bool>& vect)
@@ -210,6 +220,7 @@ void VideoReader::RunDecoderThread(void)
                       //m_outputFrames[m_streamIdToVecId[streamId]].push(std::move(frame));
                       if (!m_outputFrames.Add(std::move(frame)))
                       {
+                        std::cout << "Decoding thread stopped: frame limite exceed\n";
                         return;
                       }
                   }
@@ -249,12 +260,15 @@ void VideoReader::RunDecoderThread(void)
                     PRINT_DEBUG_VideoReader("Got a frame for streamVectId "<<streamVectId)
                     if(!m_outputFrames.Add(std::move(frame)))
                     {
+                      std::cout << "Decoding thread stopped: frame limite exceed\n";
                       return;
                     }
                     //m_outputFrames[streamVectId].emplace();
                 }
                 else
                 {
+                  std::cout << "Decoding thread stopped: video done\n";
+                  m_outputFrames.SetTotal(0);
                   return;
                 }
                 //m_doneVect[streamVectId] = (!got_a_frame) || (m_outputFrames[streamVectId].size() >= m_nbFrames);
@@ -293,6 +307,7 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
                 if (timeSinceStartDisplay >= std::chrono::milliseconds(tmp_frame->GetDisplayTimestamp()))
                 {
                   frame = std::move(tmp_frame);
+                  m_outputFrames.Pop();
                   ++nbUsed;
                 }
                 else
@@ -302,6 +317,7 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
               }
               else
               {
+                std::cout << "No more frames \n";
                 done = true;
               }
 

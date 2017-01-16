@@ -5,6 +5,7 @@
 #include <queue>
 #include <memory>
 #include <chrono>
+#include <thread>
 
 extern "C"
 {
@@ -50,13 +51,14 @@ class VideoReader
         //First version: we totaly decode the video and store in a vector the output frames
         //std::vector<std::queue<std::shared_ptr<cv::Mat>>> m_outputFrames;
         //std::vector<std::queue<std::shared_ptr<Frame>>> m_outputFrames;
-        IMT::Buffer<Frame, 10> m_outputFrames;
+        IMT::Buffer<Frame, 100> m_outputFrames;
         unsigned m_nbFrames;
         std::vector<bool> m_doneVect;
         std::vector<bool> m_gotOne;
         std::chrono::system_clock::time_point m_startDisplayTime;
         struct SwsContext* m_swsCtx;
         AVFrame* m_frame_ptr2;
+        std::thread m_decodingThread;
 
         void RunDecoderThread(void);
 };
