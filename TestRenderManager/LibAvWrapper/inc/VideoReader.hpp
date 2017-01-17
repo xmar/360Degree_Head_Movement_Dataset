@@ -26,7 +26,7 @@ class Frame;
 class VideoReader
 {
     public:
-        VideoReader(std::string inputPath);
+        VideoReader(std::string inputPath, size_t bufferSize = 10);
         VideoReader(const VideoReader&) = delete;
         VideoReader& operator=(const VideoReader&) = delete;
 
@@ -51,7 +51,7 @@ class VideoReader
         //First version: we totaly decode the video and store in a vector the output frames
         //std::vector<std::queue<std::shared_ptr<cv::Mat>>> m_outputFrames;
         //std::vector<std::queue<std::shared_ptr<Frame>>> m_outputFrames;
-        IMT::Buffer<Frame, 100> m_outputFrames;
+        IMT::Buffer<Frame> m_outputFrames;
         unsigned m_nbFrames;
         std::vector<bool> m_doneVect;
         std::vector<bool> m_gotOne;

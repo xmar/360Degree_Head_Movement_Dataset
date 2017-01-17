@@ -34,6 +34,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
+#include "boost/program_options.hpp"
+#include <boost/config.hpp>
 
 #include <GL/glew.h>
 
@@ -49,16 +51,15 @@
 #include <osvr/RenderKit/RenderKitGraphicsTransforms.h>
 
 //Internal Includes
-#include "MeshCubeEquiUV.hpp"
-#include "ShaderTextureStatic.hpp"
-#include "ShaderTextureVideo.hpp"
+#include "Mesh.hpp"
+#include "ShaderTexture.hpp"
+#include "ConfigParser.hpp"
 
 using namespace IMT;
 
-//static std::shared_ptr<ShaderTexture> sampleShader = std::make_shared<ShaderTextureStatic>("equi.jpg");//"test.png");
-static std::shared_ptr<ShaderTexture> sampleShader = std::make_shared<ShaderTextureVideo>("car_equirectangular_4k.mkv");
+static std::shared_ptr<ShaderTexture> sampleShader;
 
-static MeshCubeEquiUV* roomCube = nullptr;
+static std::shared_ptr<Mesh> roomMesh(nullptr);
 
 // Set to true when it is time for the application to quit.
 // Handlers below that set it to true when the user causes
@@ -211,136 +212,161 @@ void DrawWorld(
                                         std::chrono::microseconds{deadline.microseconds} );
 
     /// Draw a cube with a 5-meter radius as the room we are floating in.
-    roomCube->Draw(projectionGL, viewGL, sampleShader, std::move(deadlineTP));
+    roomMesh->Draw(projectionGL, viewGL, sampleShader, std::move(deadlineTP));
 }
 
 void Usage(std::string name) {
-  std::cerr << "Usage: " << name << " [TrianglesPerSide]" << std::endl;
-  std::cerr << "       Default triangles per cube face = 1e3" << std::endl;
+  std::cerr << "Usage: " << name << " -c pathToConfigFile" << std::endl;
+  std::cerr << "       pathToConfigFile: path to the ini configuration file" << std::endl;
 
   exit(-1);
 }
 
 int main(int argc, char* argv[]) {
     // Parse the command line
-    double trianglesPerSide = 1e3;
-    int realParams = 0;
-    for (int i = 1; i < argc; i++) {
-      if (argv[i][0] == '-') {
-        Usage(argv[0]);
+    namespace po = boost::program_options;
+    po::options_description desc("Options");
+    desc.add_options()
+       ("help,h", "Produce this help message")
+       ("config,c", po::value<std::string>(), "Path to the configuration file")
+       ;
+
+   po::variables_map vm;
+   try
+   {
+      po::store(po::parse_command_line(argc, argv, desc),
+            vm);
+
+      //--help
+      if ( vm.count("help") || !vm.count("config"))
+      {
+         Usage(argv[0]);
       }
-      else {
-        switch (++realParams) {
-        case 1:
-          trianglesPerSide = atof(argv[i]);
-          break;
-        default:
-          Usage(argv[0]);
-        }
+
+      po::notify(vm);
+
+      //Get the path to the configuration file
+      std::string pathToIni = vm["config"].as<std::string>();
+
+      //Create the configuration file parser
+      ConfigParser configParser(pathToIni);
+      configParser.Init();
+
+      //Get the mesh and the shader generated from the configuration parser
+      roomMesh = configParser.GetMesh();
+      sampleShader = configParser.GetShaderTexture();
+
+      // Get an OSVR client context to use to access the devices
+      // that we need.
+      osvr::clientkit::ClientContext context(
+          "com.osvr.renderManager.openGLExample");
+
+      // Open OpenGL and set up the context for rendering to
+      // an HMD.  Do this using the OSVR RenderManager interface,
+      // which maps to the nVidia or other vendor direct mode
+      // to reduce the latency.
+      std::shared_ptr<osvr::renderkit::RenderManager> render(
+          osvr::renderkit::createRenderManager(context.get(), "OpenGL")
+      );
+
+      if ((render == nullptr) || (!render->doingOkay())) {
+          std::cerr << "Could not create RenderManager" << std::endl;
+          return 1;
       }
-    }
-    if (realParams > 1) {
-      Usage(argv[0]);
-    }
-    size_t triangles = static_cast<size_t>(
-      trianglesPerSide * 6);
-    roomCube = new MeshCubeEquiUV(5.0, triangles);
-    std::cout << "Rendering " << trianglesPerSide << " triangles per cube face" << std::endl;
-    std::cout << "Rendering " << triangles << " triangles total" << std::endl;
 
-    // Get an OSVR client context to use to access the devices
-    // that we need.
-    osvr::clientkit::ClientContext context(
-        "com.osvr.renderManager.openGLExample");
+      // Set callback to handle setting up rendering in an eye
+      render->SetViewProjectionCallback(SetupEye);
 
-    // Open OpenGL and set up the context for rendering to
-    // an HMD.  Do this using the OSVR RenderManager interface,
-    // which maps to the nVidia or other vendor direct mode
-    // to reduce the latency.
-    osvr::renderkit::RenderManager* render =
-        osvr::renderkit::createRenderManager(context.get(), "OpenGL");
+      // Set callback to handle setting up rendering in a display
+      render->SetDisplayCallback(SetupDisplay);
 
-    if ((render == nullptr) || (!render->doingOkay())) {
-        std::cerr << "Could not create RenderManager" << std::endl;
-        return 1;
-    }
+      // Register callback to render things in world space.
+      render->AddRenderCallback("/", DrawWorld);
 
-    // Set callback to handle setting up rendering in an eye
-    render->SetViewProjectionCallback(SetupEye);
+  // Set up a handler to cause us to exit cleanly.
+  #ifdef _WIN32
+      SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
+  #endif
 
-    // Set callback to handle setting up rendering in a display
-    render->SetDisplayCallback(SetupDisplay);
+      // Open the display and make sure this worked.
+      osvr::renderkit::RenderManager::OpenResults ret = render->OpenDisplay();
+      if (ret.status == osvr::renderkit::RenderManager::OpenStatus::FAILURE) {
+          std::cerr << "Could not open display" << std::endl;
+          return 2;
+      }
+      if (ret.library.OpenGL == nullptr) {
+          std::cerr << "Attempted to run an OpenGL program with a config file "
+                    << "that specified a different rendering library."
+                    << std::endl;
+          return 3;
+      }
 
-    // Register callback to render things in world space.
-    render->AddRenderCallback("/", DrawWorld);
+      // Set up the rendering state we need.
+      if (!SetupRendering(ret.library)) {
+          return 3;
+      }
 
-// Set up a handler to cause us to exit cleanly.
-#ifdef _WIN32
-    SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
-#endif
+      glewExperimental = true;
+      if (glewInit() != GLEW_OK) {
+          std::cerr << "Failed ot initialize GLEW\n" << std::endl;
+          return -1;
+      }
+      // Clear any GL error that Glew caused.  Apparently on Non-Windows
+      // platforms, this can cause a spurious  error 1280.
+      glGetError();
 
-    // Open the display and make sure this worked.
-    osvr::renderkit::RenderManager::OpenResults ret = render->OpenDisplay();
-    if (ret.status == osvr::renderkit::RenderManager::OpenStatus::FAILURE) {
-        std::cerr << "Could not open display" << std::endl;
-        delete render;
-        return 2;
-    }
-    if (ret.library.OpenGL == nullptr) {
-        std::cerr << "Attempted to run an OpenGL program with a config file "
-                  << "that specified a different rendering library."
+      // Frame timing
+      size_t countFrames = 0;
+      auto startTime = std::chrono::system_clock::now();
+
+      // Continue rendering until it is time to quit.
+      while (!quit) {
+          // Update the context so we get our callbacks called and
+          // update tracker state.
+          context.update();
+
+          if (!render->Render()) {
+              std::cerr
+                  << "Render() returned false, maybe because it was asked to quit"
                   << std::endl;
-        return 3;
+              quit = true;
+          }
+
+          // Print timing info
+          auto nowTime = std::chrono::system_clock::now();
+          auto duration = nowTime-startTime;
+          ++countFrames;
+          constexpr std::chrono::seconds twoSeconds(2);
+          if (duration >= twoSeconds)
+          {
+            std::cout << "\033[2K\r" << "Rendering at " << countFrames / std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count()
+              << " fps" << std::flush;
+            startTime = nowTime;
+            countFrames = 0;
+          }
+      }
+
     }
-
-    // Set up the rendering state we need.
-    if (!SetupRendering(ret.library)) {
-        return 3;
+    catch(const po::error& e)
+    {
+       std::cerr << "ERROR: " << e.what() << std::endl << std::endl
+          << desc << std::endl;
+       return 1;
     }
+    catch(std::exception& e)
+    {
+       std::cerr << "Uncatched exception: " << e.what() << std::endl
+          << desc << std::endl;
+       return 1;
 
-    glewExperimental = true;
-    if (glewInit() != GLEW_OK) {
-        std::cerr << "Failed ot initialize GLEW\n" << std::endl;
-        return -1;
     }
-    // Clear any GL error that Glew caused.  Apparently on Non-Windows
-    // platforms, this can cause a spurious  error 1280.
-    glGetError();
+    catch(...)
+    {
+       std::cerr << "Uncatched exception" << std::endl
+         << desc << std::endl;
+       return 1;
 
-    // Frame timing
-    size_t countFrames = 0;
-    auto startTime = std::chrono::system_clock::now();
-
-    // Continue rendering until it is time to quit.
-    while (!quit) {
-        // Update the context so we get our callbacks called and
-        // update tracker state.
-        context.update();
-
-        if (!render->Render()) {
-            std::cerr
-                << "Render() returned false, maybe because it was asked to quit"
-                << std::endl;
-            quit = true;
-        }
-
-        // Print timing info
-        auto nowTime = std::chrono::system_clock::now();
-        auto duration = nowTime-startTime;
-        ++countFrames;
-        constexpr std::chrono::seconds twoSeconds(2);
-        if (duration >= twoSeconds)
-        {
-          std::cout << "\033[2K\r" << "Rendering at " << countFrames / std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count()
-            << " fps" << std::flush;
-          startTime = nowTime;
-          countFrames = 0;
-        }
     }
-
-    // Close the Renderer interface cleanly.
-    delete roomCube;
-    delete render;
 
     return 0;
 }

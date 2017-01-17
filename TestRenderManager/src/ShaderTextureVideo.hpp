@@ -13,9 +13,9 @@ namespace IMT {
 class ShaderTextureVideo: public ShaderTexture
 {
 public:
-  ShaderTextureVideo(std::string pathToVideo): ShaderTexture(),
-      m_pathToVideo(pathToVideo), m_videoReader(pathToVideo)
-      {m_videoReader.Init(100000);}
+  ShaderTextureVideo(std::string pathToVideo, size_t nbFrame = -1, size_t bufferSize = 10): ShaderTexture(),
+      m_pathToVideo(pathToVideo), m_videoReader(pathToVideo, bufferSize)
+      {m_videoReader.Init(nbFrame);}
   virtual ~ShaderTextureVideo(void) = default;
 private:
   std::string m_pathToVideo;

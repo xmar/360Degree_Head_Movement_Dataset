@@ -23,11 +23,11 @@
 
 namespace IMT
 {
-template <class T, size_t m_maxQueueSize = 10>
+template <class T>
 class Buffer
 {
 public:
-  Buffer(void): m_mutex(), m_cv(), m_queue(), m_nbSeenObjects(0), m_totalAllowedObjects(0), m_stopped(false) {};
+  Buffer(size_t bufferSize): m_mutex(), m_cv(), m_queue(), m_nbSeenObjects(0), m_totalAllowedObjects(0), m_stopped(false), m_maxQueueSize(bufferSize) {};
   Buffer(const Buffer&) = delete;
   Buffer& operator=(const Buffer&) = delete;
   Buffer(Buffer&&) noexcept = default;
@@ -156,6 +156,7 @@ private:
   size_t m_nbSeenObjects;
   size_t m_totalAllowedObjects;
   bool m_stopped;
+  const size_t m_maxQueueSize;
 
   bool IsAllDones__notProtected(void) const
   {

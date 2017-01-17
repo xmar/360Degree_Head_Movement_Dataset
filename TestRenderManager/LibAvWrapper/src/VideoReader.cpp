@@ -26,8 +26,8 @@ extern "C"
 
 using namespace IMT::LibAv;
 
-VideoReader::VideoReader(std::string inputPath): m_inputPath(inputPath), m_fmt_ctx(nullptr), m_videoStreamIds(),
-    m_outputFrames(), m_streamIdToVecId(), m_nbFrames(0), m_doneVect(), m_gotOne(), m_startDisplayTime(std::chrono::system_clock::now()),
+VideoReader::VideoReader(std::string inputPath, size_t bufferSize): m_inputPath(inputPath), m_fmt_ctx(nullptr), m_videoStreamIds(),
+    m_outputFrames(bufferSize), m_streamIdToVecId(), m_nbFrames(0), m_doneVect(), m_gotOne(), m_startDisplayTime(std::chrono::system_clock::now()),
     m_swsCtx(nullptr), m_frame_ptr2(nullptr), m_decodingThread()
 {
 }
