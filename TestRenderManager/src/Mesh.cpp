@@ -16,13 +16,13 @@ Mesh::~Mesh(void)
   }
 }
 
-void Mesh::Draw(const GLdouble projection[], const GLdouble modelView[],
+DisplayFrameInfo Mesh::Draw(const GLdouble projection[], const GLdouble modelView[],
                 std::shared_ptr<ShaderTexture> shader,
                 std::chrono::system_clock::time_point deadline)
 {
     Init();
 
-    shader->useProgram(projection, modelView, std::move(deadline));
+    auto frameInfo = shader->useProgram(projection, modelView, std::move(deadline));
 
     glBindVertexArray(m_vertexArrayId);
     {
@@ -30,6 +30,7 @@ void Mesh::Draw(const GLdouble projection[], const GLdouble modelView[],
                      static_cast<GLsizei>(m_vertexBufferData.size()));
     }
     glBindVertexArray(0);
+    return std::move(frameInfo);
 }
 
 void Mesh::Init(void)

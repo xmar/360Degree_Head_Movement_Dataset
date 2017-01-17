@@ -54,12 +54,18 @@
 #include "Mesh.hpp"
 #include "ShaderTexture.hpp"
 #include "ConfigParser.hpp"
+#include "LogWriter.hpp"
+#include "Quaternion.hpp"
 
 using namespace IMT;
 
-static std::shared_ptr<ShaderTexture> sampleShader;
-
+//static global variable
+static std::shared_ptr<ShaderTexture> sampleShader(nullptr);
 static std::shared_ptr<Mesh> roomMesh(nullptr);
+static std::shared_ptr<LogWriter> logWriter(nullptr);
+static bool firstFrame = true;
+static std::chrono::system_clock::time_point startDisplayTime;
+
 
 // Set to true when it is time for the application to quit.
 // Handlers below that set it to true when the user causes
@@ -211,8 +217,32 @@ void DrawWorld(
                                         std::chrono::seconds{deadline.seconds} +
                                         std::chrono::microseconds{deadline.microseconds} );
 
+    auto now = std::chrono::system_clock::now();
+    if (firstFrame)
+    {
+      firstFrame = false;
+      startDisplayTime = now;
+      logWriter->Start();
+    }
+    deadlineTP = std::chrono::system_clock::time_point(now - startDisplayTime);
+
     /// Draw a cube with a 5-meter radius as the room we are floating in.
-    roomMesh->Draw(projectionGL, viewGL, sampleShader, std::move(deadlineTP));
+    auto frameInfo = roomMesh->Draw(projectionGL, viewGL, sampleShader, std::move(deadlineTP));
+
+    auto q = ToQuaternion(pose.rotation);
+    Quaternion v(0, 1, 0, 0);
+    Eigen::AngleAxisd angleAxisX(0.5*M_PI, Eigen::Vector3d::UnitX());
+    Eigen::AngleAxisd angleAxisZ(0.5*M_PI, Eigen::Vector3d::UnitZ());
+    Quaternion rotToOSVRX(angleAxisX);
+    Quaternion rotToOSVRZ(angleAxisZ);
+    Quaternion rotToOSVR = rotToOSVRZ*rotToOSVRX;
+    Quaternion rot = rotToOSVR*q*rotToOSVR.conjugate();
+
+    logWriter->AddLog(Log(frameInfo.m_timestamp, rot, frameInfo.m_frameDisplayId));
+    if (frameInfo.m_last)
+    {
+      logWriter->Stop();
+    }
 }
 
 void Usage(std::string name) {
@@ -255,6 +285,7 @@ int main(int argc, char* argv[]) {
       //Get the mesh and the shader generated from the configuration parser
       roomMesh = configParser.GetMesh();
       sampleShader = configParser.GetShaderTexture();
+      logWriter = configParser.GetLogWriter();
 
       // Get an OSVR client context to use to access the devices
       // that we need.

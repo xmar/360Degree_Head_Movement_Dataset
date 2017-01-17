@@ -28,7 +28,7 @@ using namespace IMT::LibAv;
 
 VideoReader::VideoReader(std::string inputPath, size_t bufferSize): m_inputPath(inputPath), m_fmt_ctx(nullptr), m_videoStreamIds(),
     m_outputFrames(bufferSize), m_streamIdToVecId(), m_nbFrames(0), m_doneVect(), m_gotOne(), m_startDisplayTime(std::chrono::system_clock::now()),
-    m_swsCtx(nullptr), m_frame_ptr2(nullptr), m_decodingThread()
+    m_swsCtx(nullptr), m_frame_ptr2(nullptr), m_decodingThread(), m_lastDisplayedPictureNumber(-1)
 {
 }
 
@@ -279,15 +279,10 @@ void VideoReader::RunDecoderThread(void)
 }
 
 //#ifdef USE_OPENGL
-void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::system_clock::time_point deadline)
+IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::system_clock::time_point deadline)
 {
-    auto now = std::chrono::system_clock::now();
     bool first = (m_swsCtx == nullptr);
-    if (first)
-    {
-      m_startDisplayTime = now;
-    }
-    auto timeSinceStartDisplay = now - m_startDisplayTime;
+    bool last = false;
     if (streamId < 1)
     {
         if (!m_outputFrames.IsAllDones())
@@ -304,10 +299,11 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
               auto tmp_frame = m_outputFrames.Get();
               if (tmp_frame != nullptr)
               {
-                if (timeSinceStartDisplay >= std::chrono::milliseconds(tmp_frame->GetDisplayTimestamp()))
+                if (deadline >= std::chrono::system_clock::time_point(std::chrono::milliseconds(tmp_frame->GetDisplayTimestamp())))
                 {
                   frame = std::move(tmp_frame);
                   m_outputFrames.Pop();
+                  ++m_lastDisplayedPictureNumber;
                   ++nbUsed;
                 }
                 else
@@ -319,8 +315,8 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
               {
                 std::cout << "No more frames \n";
                 done = true;
+                last = true;
               }
-
             }
 
             if (nbUsed > 1)
@@ -331,7 +327,7 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
             {
               auto w = frame->GetWidth();
               auto h = frame->GetHeight();
-              if (m_swsCtx == nullptr)
+              if (first)
               {
                 m_swsCtx = sws_getContext(w, h,
                                   AV_PIX_FMT_YUV420P, w, h,
@@ -341,6 +337,8 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
               }
               //transform from YUV420p domain to RGB domain
               sws_scale(m_swsCtx, frame->GetDataPtr(), frame->GetRowLength(), 0, h, m_frame_ptr2->data, m_frame_ptr2->linesize);
+
+              //m_lastDisplayedPictureNumber = frame->GetDisplayPictureNumber();
 
               if (first)
               {
@@ -358,8 +356,12 @@ void VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::
               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
               glGenerateMipmap(GL_TEXTURE_2D);
             }
+            else if (frame != nullptr && !frame->IsValid())
+            {
+              last = true;
+            }
         }
     }
-    return;
+    return {m_lastDisplayedPictureNumber, deadline, last};
 }
 //#endif

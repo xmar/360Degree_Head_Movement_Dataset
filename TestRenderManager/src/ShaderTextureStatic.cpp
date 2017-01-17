@@ -8,7 +8,7 @@
 
 using namespace IMT;
 
-void ShaderTextureStatic::UpdateTexture(std::chrono::system_clock::time_point deadline)
+DisplayFrameInfo ShaderTextureStatic::UpdateTexture(std::chrono::system_clock::time_point deadline)
 {
   auto& textureId = GetTextureId();
   if(textureId == 0)
@@ -46,4 +46,5 @@ void ShaderTextureStatic::UpdateTexture(std::chrono::system_clock::time_point de
     stbi_image_free(image);
     std::cout << "Texture loaded" << std::endl;
   }
+  return {0, deadline, false};
 }

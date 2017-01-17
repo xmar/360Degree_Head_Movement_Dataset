@@ -17,6 +17,7 @@ extern "C"
 }
 
 #include "Buffer.hpp"
+#include "DisplayFrameInfo.hpp"
 
 namespace IMT {
 namespace LibAv {
@@ -36,7 +37,8 @@ class VideoReader
 
         //#ifdef USE_OPENGL
         //Update the current binded OpenGL Texture object with the content of the next picture (if right deadline)
-        void SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::system_clock::time_point deadline);
+        //return the current frame info
+        IMT::DisplayFrameInfo SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::system_clock::time_point deadline);
         //#endif
 
         unsigned GetNbStream(void) const {return m_videoStreamIds.size();}
@@ -59,6 +61,7 @@ class VideoReader
         struct SwsContext* m_swsCtx;
         AVFrame* m_frame_ptr2;
         std::thread m_decodingThread;
+        size_t m_lastDisplayedPictureNumber;
 
         void RunDecoderThread(void);
 };

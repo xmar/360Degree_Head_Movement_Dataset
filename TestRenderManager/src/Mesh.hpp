@@ -7,6 +7,7 @@
 
 // Library/third-party includes
 #include <GL/glew.h>
+#include "DisplayFrameInfo.hpp"
 
 // This must come after we include <GL/gl.h> so its pointer types are defined.
 #include <osvr/RenderKit/GraphicsLibraryOpenGL.h>
@@ -29,7 +30,9 @@ public:
       m_vertexArrayId(0), m_vertexBufferData(), m_uvBufferData() {}
   virtual ~Mesh(void);
 
-  void Draw(const GLdouble projection[], const GLdouble modelView[],
+  //Draw the Mesh in the specified viewport and apply the specified shader.
+  //It return the displayed picture number
+  DisplayFrameInfo Draw(const GLdouble projection[], const GLdouble modelView[],
           std::shared_ptr<ShaderTexture> shader,
           std::chrono::system_clock::time_point deadline);
 

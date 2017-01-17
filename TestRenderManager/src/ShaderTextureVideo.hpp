@@ -21,7 +21,7 @@ private:
   std::string m_pathToVideo;
   LibAv::VideoReader m_videoReader;
 
-  virtual void UpdateTexture(std::chrono::system_clock::time_point deadline) override;
+  virtual DisplayFrameInfo UpdateTexture(std::chrono::system_clock::time_point deadline) override;
 };
 
 }
