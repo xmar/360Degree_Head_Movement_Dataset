@@ -215,6 +215,7 @@ void VideoReader::RunDecoderThread(void)
                   got_a_frame = got_a_frame || (ret == 0);
                   if (ret == 0)
                   {
+                      frame->SetTimeBase(m_fmt_ctx->streams[streamId]->time_base);
                       PRINT_DEBUG_VideoReader("Got a frame for streamId " <<streamId)
                       m_gotOne[m_streamIdToVecId[streamId]] = true;
                       //m_outputFrames[m_streamIdToVecId[streamId]].push(std::move(frame));
@@ -283,6 +284,8 @@ IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned stream
 {
     bool first = (m_swsCtx == nullptr);
     bool last = false;
+    auto pts = std::chrono::system_clock::time_point(std::chrono::seconds(-1));
+    size_t nbUsed = 0;
     if (streamId < 1)
     {
         if (!m_outputFrames.IsAllDones())
@@ -293,14 +296,14 @@ IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned stream
             // return matPtr;
             std::shared_ptr<Frame> frame(nullptr);
             bool done = false;
-            size_t nbUsed = 0;
             while(!done)
             {
               auto tmp_frame = m_outputFrames.Get();
               if (tmp_frame != nullptr)
               {
-                if (deadline >= std::chrono::system_clock::time_point(std::chrono::milliseconds(tmp_frame->GetDisplayTimestamp())))
+                if (deadline >= tmp_frame->GetDisplayTimestamp())
                 {
+                  pts = tmp_frame->GetDisplayTimestamp();
                   frame = std::move(tmp_frame);
                   m_outputFrames.Pop();
                   ++m_lastDisplayedPictureNumber;
@@ -313,16 +316,16 @@ IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned stream
               }
               else
               {
-                std::cout << "No more frames \n";
+                //std::cout << "No more frames \n";
                 done = true;
-                last = true;
+                //last = true;
               }
             }
 
-            if (nbUsed > 1)
-            {
-              std::cout << "Nb dropped frame: " << nbUsed-1 << std::endl;
-            }
+            // if (nbUsed > 1)
+            // {
+            //   std::cout << "Nb dropped frame: " << nbUsed-1 << std::endl;
+            // }
             if (frame != nullptr && frame->IsValid())
             {
               auto w = frame->GetWidth();
@@ -353,6 +356,7 @@ IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned stream
               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+              // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
               glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
               glGenerateMipmap(GL_TEXTURE_2D);
             }
@@ -361,7 +365,11 @@ IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned stream
               last = true;
             }
         }
+        else
+        {
+          last = true;
+        }
     }
-    return {m_lastDisplayedPictureNumber, deadline, last};
+    return {m_lastDisplayedPictureNumber, nbUsed > 0 ? nbUsed - 1 : 0, deadline, pts, last};
 }
 //#endif

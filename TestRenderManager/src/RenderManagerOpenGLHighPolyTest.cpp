@@ -64,7 +64,10 @@ static std::shared_ptr<ShaderTexture> sampleShader(nullptr);
 static std::shared_ptr<Mesh> roomMesh(nullptr);
 static std::shared_ptr<LogWriter> logWriter(nullptr);
 static bool firstFrame = true;
-static std::chrono::system_clock::time_point startDisplayTime;
+constexpr std::chrono::system_clock::time_point zero(std::chrono::nanoseconds(0));
+static std::chrono::system_clock::time_point startDisplayTime(zero);
+static size_t lastDisplayedFrame(0);
+static size_t lastNbDroppedFrame(0);
 
 
 // Set to true when it is time for the application to quit.
@@ -218,10 +221,10 @@ void DrawWorld(
                                         std::chrono::microseconds{deadline.microseconds} );
 
     auto now = std::chrono::system_clock::now();
-    if (firstFrame)
+    if (startDisplayTime == zero)
     {
+      startDisplayTime = now;// + std::chrono::milliseconds(5000);
       firstFrame = false;
-      startDisplayTime = now;
       logWriter->Start();
     }
     deadlineTP = std::chrono::system_clock::time_point(now - startDisplayTime);
@@ -238,7 +241,15 @@ void DrawWorld(
     Quaternion rotToOSVR = rotToOSVRZ*rotToOSVRX;
     Quaternion rot = rotToOSVR*q*rotToOSVR.conjugate();
 
-    logWriter->AddLog(Log(frameInfo.m_timestamp, rot, frameInfo.m_frameDisplayId));
+
+    // if(frameInfo.m_timestamp > zero && firstFrame)
+    // {
+    //   firstFrame = false;
+    //   logWriter->Start();
+    // }
+    lastDisplayedFrame = frameInfo.m_frameDisplayId;
+    lastNbDroppedFrame += frameInfo.m_nbDroppedFrame;
+    logWriter->AddLog(Log(frameInfo.m_timestamp, frameInfo.m_pts, rot, frameInfo.m_frameDisplayId));
     if (frameInfo.m_last)
     {
       logWriter->Stop();
@@ -346,8 +357,12 @@ int main(int argc, char* argv[]) {
       // platforms, this can cause a spurious  error 1280.
       glGetError();
 
+      //Sleep 5 seconds to give time for the decoder to start properly
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+
       // Frame timing
       size_t countFrames = 0;
+      size_t startDisplayedFrame = lastDisplayedFrame;
       auto startTime = std::chrono::system_clock::now();
 
       // Continue rendering until it is time to quit.
@@ -371,8 +386,11 @@ int main(int argc, char* argv[]) {
           if (duration >= twoSeconds)
           {
             std::cout << "\033[2K\r" << "Rendering at " << countFrames / std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count()
-              << " fps" << std::flush;
+              << " fps; Video displayed at " << (lastDisplayedFrame-startDisplayedFrame - lastNbDroppedFrame)/std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count()
+              << " fps ( felt fps: " << (lastDisplayedFrame-startDisplayedFrame)/std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count() << " fps)" << std::flush;
             startTime = nowTime;
+            startDisplayedFrame = lastDisplayedFrame;
+            lastNbDroppedFrame = 0;
             countFrames = 0;
           }
       }

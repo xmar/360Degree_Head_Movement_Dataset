@@ -46,5 +46,5 @@ DisplayFrameInfo ShaderTextureStatic::UpdateTexture(std::chrono::system_clock::t
     stbi_image_free(image);
     std::cout << "Texture loaded" << std::endl;
   }
-  return {0, deadline, false};
+  return {0, 0, deadline, deadline, false};
 }

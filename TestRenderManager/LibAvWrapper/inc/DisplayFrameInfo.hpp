@@ -16,7 +16,9 @@ typedef struct DisplayFrameInfo
 public:
   using TimePoint = std::chrono::system_clock::time_point;
   size_t m_frameDisplayId;
+  size_t m_nbDroppedFrame;
   TimePoint m_timestamp;
+  TimePoint m_pts;
   bool m_last;
 } DisplayFrameInfo;
 

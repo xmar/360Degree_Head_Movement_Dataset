@@ -43,16 +43,9 @@ void ConfigParser::Init(void)
   else if (textureType == "video")
   {
     auto pathToVideo = pt.get<std::string>(textureConfig+".pathToVideo");
-    size_t nbFrame = -1;
-    if( pt.count(textureConfig+".nbFrame") != 0 )
-    {
-      nbFrame = pt.get<size_t>(textureConfig+".nbFrame");
-    }
-    size_t bufferSize = 10;
-    if( pt.count(textureConfig+".bufferSize") != 0 )
-    {
-      bufferSize = pt.get<size_t>(textureConfig+".bufferSize");
-    }
+    size_t nbFrame = pt.get<size_t>(textureConfig+".nbFrame");
+    size_t  bufferSize = pt.get<size_t>(textureConfig+".bufferSize");
+    std::cout << "bufferSize " <<bufferSize << std::endl;
     m_outputShaderTexture = std::make_shared<ShaderTextureVideo>(pathToVideo, nbFrame, bufferSize);
   }
   else

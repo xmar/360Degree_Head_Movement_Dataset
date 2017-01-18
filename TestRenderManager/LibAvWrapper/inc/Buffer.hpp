@@ -12,6 +12,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <memory>
+#include <atomic>
 
 #define DEBUG_BUFFER 0
 #if DEBUG_BUFFER == 1
@@ -38,93 +39,76 @@ public:
   bool Add(std::shared_ptr<T> t)
   {
     std::unique_lock<std::mutex> locker(m_mutex);
-    if (IsAllDones__notProtected() || m_stopped)
+    while(true)
     {
-      PRINT_DEBUG_BUFFER("Cannot add more frame to the buffer")
-      locker.unlock();
-      m_cv.notify_all();
-      return false;
+      if (!StillAcceptAdd())
+      {
+        //No more work accepted
+        if (m_queue_producer.empty())
+        {
+          //no more work accepted and no object left in the m_queue_producer
+          m_workerDone = true;
+        }
+        return false;
+      }
+      if (m_queue_producer.size() <= m_maxQueueSize)
+      {
+        m_queue_producer.push(std::move(t));
+        return true;
+      }
+      else
+      {
+        m_cv.wait(locker, [this](){return m_queue_producer.size() <= m_maxQueueSize || !StillAcceptAdd();});
+      }
     }
-    PRINT_DEBUG_BUFFER("Wait to add a frame in the buffer")
-    m_cv.wait(locker, [this](){return m_queue.size() <= m_maxQueueSize || m_stopped;});
-    if (m_stopped)
-    {
-      PRINT_DEBUG_BUFFER("Cannot add more frame to the buffer: buffer stopped")
-      locker.unlock();
-      return false;
-    }
-    m_queue.push(std::move(t));
-    ++m_nbSeenObjects;
-    PRINT_DEBUG_BUFFER("Add the frame to the buffer: buffer size "<< m_queue.size() << "; number of object seen: " <<m_nbSeenObjects)
-    locker.unlock();
-    m_cv.notify_all();
-    return true;
   }
 
   //Access first element from the queue
   void Pop(void)
   {
-    std::unique_lock<std::mutex> locker(m_mutex);
-    if (m_stopped)
+    while(!IsAllDones())
     {
-      PRINT_DEBUG_BUFFER("No more frame to pop")
-      locker.unlock();
-      return;
+      if (!m_queue.empty())
+      {
+        m_queue.pop();
+        PRINT_DEBUG_BUFFER("Poped a frame");
+        return;
+      }
+      else
+      {
+        PRINT_DEBUG_BUFFER("Pop: swap queues")
+        SwapQueues();
+      }
     }
-    if (!IsAllDones__notProtected())
-    {
-      PRINT_DEBUG_BUFFER("Wait to pop a frame")
-      m_cv.wait(locker, [this](){return m_queue.size() > 0 || m_stopped || IsAllDones__notProtected();});
-    }
-    if (m_queue.size() > 0 && !m_stopped)
-    {
-      m_queue.pop();
-      PRINT_DEBUG_BUFFER("Poped a frame: buffer size " << m_queue.size() << "; number of object seen: " <<m_nbSeenObjects)
-      locker.unlock();
-      m_cv.notify_all();
-    }
-    else if (IsAllDones__notProtected() || m_stopped)
-    {
-      PRINT_DEBUG_BUFFER("No more frame to pop")
-      locker.unlock();
-    }
+    PRINT_DEBUG_BUFFER("No more frame to pop")
   }
 
   //Access first element from the queue
   std::shared_ptr<T> Get(void)
   {
-    std::unique_lock<std::mutex> locker(m_mutex);
-    if (m_stopped)
+    while(!IsAllDones())
     {
-      PRINT_DEBUG_BUFFER("No more frame to get")
-      locker.unlock();
-      return nullptr;
-    }
-    else
-    {
-      if (!IsAllDones__notProtected())
+      if (!m_queue.empty())
       {
-        PRINT_DEBUG_BUFFER("Wait to get a frame")
-        m_cv.wait(locker, [this](){return m_queue.size() > 0 || m_stopped || IsAllDones__notProtected();});
+        PRINT_DEBUG_BUFFER("Get a frame");
+        return m_queue.front();;
       }
-      if (m_queue.size() > 0 && !m_stopped)
+      else
       {
-        auto t = m_queue.front();
-        PRINT_DEBUG_BUFFER("Got a frame: buffer size " << m_queue.size() << "; number of object seen: " <<m_nbSeenObjects)
-        locker.unlock();
-        m_cv.notify_all();
-        return t;
-      }
-      else if (IsAllDones__notProtected() || m_stopped)
-      {
-        PRINT_DEBUG_BUFFER("No more frame to get")
-        locker.unlock();
-        return nullptr;
+        PRINT_DEBUG_BUFFER("Get: swap queues")
+        SwapQueues();
+        if(m_queue.empty() && !IsAllDones())
+        {
+          PRINT_DEBUG_BUFFER("Get: nothing to get yet")
+          return nullptr;
+        }
       }
     }
+    PRINT_DEBUG_BUFFER("No frame to get")
+    return nullptr;
   }
 
-  //Set the total number of object that will transit through the queue
+  //Set the total number of object that will transit through the queue [thread safe]
   void SetTotal(size_t total)
   {
     std::lock_guard<std::mutex> locker(m_mutex);
@@ -133,18 +117,17 @@ public:
     m_cv.notify_all();
   }
 
-  //Return true if no more object are allowed in the buffer (ie m_nbSeenObjects >= m_totalAllowedObjects)
-  //and if queue is empty
+  //Return true if the buffer will never output any object anymore [from the getter thread]
   bool IsAllDones(void)
   {
-    std::lock_guard<std::mutex> locker(m_mutex);
-    return IsAllDones__notProtected() && m_queue.empty();
+    //std::lock_guard<std::mutex> locker(m_mutex);
+    return m_workerDone && m_queue.empty();
   }
 
-  //wake up all waiting thread and stop this buffer
+  //wake up all waiting thread and stop this buffer [thread safe]
   void Stop(void)
   {
-    std::lock_guard<std::mutex> locker(m_mutex);
+    //std::lock_guard<std::mutex> locker(m_mutex);
     PRINT_DEBUG_BUFFER("Stop the buffer")
     m_stopped = true;
     m_cv.notify_all();
@@ -152,15 +135,41 @@ public:
 private:
   std::mutex m_mutex;
   std::condition_variable m_cv;
+  //not thread safe queue used by the getter thread
   std::queue<std::shared_ptr<T>> m_queue;
+  //thread safe queue used by the producer
+  std::queue<std::shared_ptr<T>> m_queue_producer;
   size_t m_nbSeenObjects;
   size_t m_totalAllowedObjects;
-  bool m_stopped;
+  //m_stopped is true if the buffer has been stopped
+  std::atomic_bool m_stopped;
+  //m_workerDone is true if the m_queue_producer buffer is empty and the buffer is not
+  //allowed to add more object
+  std::atomic_bool m_workerDone;
   const size_t m_maxQueueSize;
 
-  bool IsAllDones__notProtected(void) const
+  //swap the content from the getter and producer queues [from the getter thread]
+  void SwapQueues(void)
   {
-    return m_nbSeenObjects >= m_totalAllowedObjects;
+    if (m_queue.empty())
+    {
+      {
+        std::lock_guard<std::mutex> locker(m_mutex);
+        std::swap(m_queue, m_queue_producer);
+        if(m_queue_producer.empty() && !StillAcceptAdd())
+        {
+          m_workerDone = true;
+        }
+        PRINT_DEBUG_BUFFER("Swap: new buffer size = " << m_queue.size() << std::endl)
+       }
+      m_cv.notify_all();
+    }
+  }
+
+  //Return true if the Add function is still allowed to add object to its queue [called from producer thread]
+  bool StillAcceptAdd(void)
+  {
+    return m_nbSeenObjects < m_totalAllowedObjects && !m_stopped;
   }
 };
 }

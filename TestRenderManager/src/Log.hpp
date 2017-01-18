@@ -18,13 +18,13 @@ namespace IMT {
 class Log
 {
 public:
-  Log(Timestamp t, Quaternion q, size_t frameId): m_t(t), m_q(q), m_frameId(frameId) {};
+  Log(Timestamp t, Timestamp pts, Quaternion q, size_t frameId): m_t(t), m_pts(pts), m_q(q), m_frameId(frameId) {};
 
   const Timestamp& GetTimestamp(void) const {return m_t;};
   const Quaternion& GetQuat(void) const {return m_q;};
   friend std::ostream& operator<< (std::ostream& stream, const Log& log)
   {
-    stream << log.m_t << " " << log.m_frameId << " " << log.m_q;
+    stream << log.m_t << " " << log.m_frameId << " " << log.m_pts << " " << log.m_q;
   }
   Log operator-(const Timestamp& t) const
   {
@@ -34,6 +34,7 @@ public:
   }
 private:
   Timestamp m_t;
+  Timestamp m_pts;
   Quaternion m_q;
   size_t m_frameId;
 };

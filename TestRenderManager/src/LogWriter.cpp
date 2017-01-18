@@ -21,7 +21,7 @@ void LogWriter::AddLog(const Log& log)
     if (m_firstTimestamp)
     {
       m_firstTimestamp = false;
-      m_startTimestamp = log.GetTimestamp();
+      //m_startTimestamp = log.GetTimestamp();
     }
     if (m_lastTimestamp < log.GetTimestamp())
     {
