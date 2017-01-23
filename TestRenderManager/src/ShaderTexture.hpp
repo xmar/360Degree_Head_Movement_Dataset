@@ -105,8 +105,11 @@ class ShaderTexture {
         }
     }
 
+    virtual void InitAudio(void) {}
+    virtual void SetStartTime(std::chrono::system_clock::time_point startTime) {}
+
     DisplayFrameInfo useProgram(const GLdouble projection[], const GLdouble modelView[], std::chrono::system_clock::time_point deadline)
-    {    
+    {
         init();
         glUseProgram(m_programId);
         GLfloat projectionf[16];

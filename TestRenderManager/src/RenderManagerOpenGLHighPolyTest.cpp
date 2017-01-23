@@ -65,9 +65,10 @@ static std::shared_ptr<Mesh> roomMesh(nullptr);
 static std::shared_ptr<LogWriter> logWriter(nullptr);
 static bool firstFrame = true;
 constexpr std::chrono::system_clock::time_point zero(std::chrono::nanoseconds(0));
-static std::chrono::system_clock::time_point startDisplayTime(zero);
+static std::chrono::system_clock::time_point global_startDisplayTime(zero);
 static size_t lastDisplayedFrame(0);
 static size_t lastNbDroppedFrame(0);
+static bool started(false);
 
 
 // Set to true when it is time for the application to quit.
@@ -193,7 +194,10 @@ void DrawWorld(
     , osvr::renderkit::OSVR_ProjectionMatrix
         projection //< Projection matrix set by RenderManager
     , OSVR_TimeValue deadline //< When the frame should be sent to the screen
-    ) {
+    )
+{
+  if(started)
+  {
     // Make sure our pointers are filled in correctly.  The config file selects
     // the graphics library to use, and may not match our needs.
     if (library.OpenGL == nullptr) {
@@ -221,13 +225,14 @@ void DrawWorld(
                                         std::chrono::microseconds{deadline.microseconds} );
 
     auto now = std::chrono::system_clock::now();
-    if (startDisplayTime == zero)
+    if (global_startDisplayTime == zero)
     {
-      startDisplayTime = now;// + std::chrono::milliseconds(5000);
+      global_startDisplayTime = now;// + std::chrono::milliseconds(5000);
+      sampleShader->SetStartTime(global_startDisplayTime);
       firstFrame = false;
       logWriter->Start();
     }
-    deadlineTP = std::chrono::system_clock::time_point(now - startDisplayTime);
+    deadlineTP = std::chrono::system_clock::time_point(now - global_startDisplayTime);
 
     /// Draw a cube with a 5-meter radius as the room we are floating in.
     auto frameInfo = roomMesh->Draw(projectionGL, viewGL, sampleShader, std::move(deadlineTP));
@@ -254,6 +259,7 @@ void DrawWorld(
     {
       logWriter->Stop();
     }
+  }
 }
 
 void Usage(std::string name) {
@@ -357,8 +363,14 @@ int main(int argc, char* argv[]) {
       // platforms, this can cause a spurious  error 1280.
       glGetError();
 
+      sampleShader->InitAudio();
+
       //Sleep 5 seconds to give time for the decoder to start properly
       std::this_thread::sleep_for(std::chrono::seconds(5));
+      global_startDisplayTime = zero;
+      started = true;
+
+      std::cout << "Start player the video\n";
 
       // Frame timing
       size_t countFrames = 0;

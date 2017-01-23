@@ -4,7 +4,13 @@
 //#ifdef USE_OPENGL
 #include <GL/glew.h>
 #include <GL/gl.h>
+#include <SDL2/SDL.h>
 //#endif
+
+extern "C"
+{
+  #include "libavutil/opt.h"
+}
 
 #include <iostream>
 #include <Packet.hpp>
@@ -24,20 +30,26 @@ extern "C"
    #include <libswscale/swscale.h>
 }
 
+constexpr size_t SDL_AUDIO_BUFFER_SIZE = 1024;
+constexpr size_t MAX_AUDIO_FRAME_SIZE = 192000;
+
 using namespace IMT::LibAv;
 
 VideoReader::VideoReader(std::string inputPath, size_t bufferSize): m_inputPath(inputPath), m_fmt_ctx(nullptr), m_videoStreamIds(),
-    m_outputFrames(bufferSize), m_streamIdToVecId(), m_nbFrames(0), m_doneVect(), m_gotOne(), m_startDisplayTime(std::chrono::system_clock::now()),
-    m_swsCtx(nullptr), m_frame_ptr2(nullptr), m_decodingThread(), m_lastDisplayedPictureNumber(-1)
+    m_outputFrames(bufferSize), m_outputAudioFrames(-1), m_streamIdToVecId(), m_nbFrames(0), m_doneVect(), m_gotOne(), m_startDisplayTime(std::chrono::system_clock::now()),
+    m_swsCtx(nullptr), m_audioSwrCtx(nullptr), m_frame_ptr2(nullptr), m_decodingThread(), m_lastDisplayedPictureNumber(-1),
+    m_videoStreamId(-1), m_audioStreamId(-1), m_lastPlayedAudioFrame(nullptr)
 {
 }
 
 VideoReader::~VideoReader()
 {
+  SDL_PauseAudio(1);
   if (m_decodingThread.joinable())
   {
     std::cout << "Join decoding thread\n";
     m_outputFrames.Stop();
+    m_outputAudioFrames.Stop();
     m_decodingThread.join();
     std::cout << "Join decoding thread: done\n";
   }
@@ -57,6 +69,10 @@ VideoReader::~VideoReader()
     av_freep(&m_frame_ptr2->data[0]);
     av_frame_unref(m_frame_ptr2);
     av_frame_free(&m_frame_ptr2);
+  }
+  if (m_audioSwrCtx != nullptr)
+  {
+
   }
 }
 
@@ -122,14 +138,15 @@ void VideoReader::Init(unsigned nbFrames)
     printA(m_fmt_ctx);
 
     PRINT_DEBUG_VideoReader("Init video stream decoders");
-    if (m_fmt_ctx->nb_streams > 1)
+    if (m_fmt_ctx->nb_streams > 2)
     {
-      throw(std::invalid_argument("Support only video with one video stream"));
+      throw(std::invalid_argument("Support only video with one video stream and one audio stream"));
     }
     for (unsigned i = 0; i < m_fmt_ctx->nb_streams; ++i)
     {
         if(m_fmt_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO)
         {
+            m_videoStreamId = i;
             m_fmt_ctx->streams[i]->codec->refcounted_frames = 1;
             //m_outputFrames.emplace_back();
             m_streamIdToVecId[i] = m_videoStreamIds.size();
@@ -145,8 +162,45 @@ void VideoReader::Init(unsigned nbFrames)
                 std::cout << "Could not open the decoder for stream id " << i << std::endl;
             }
         }
+        else if (m_fmt_ctx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO)
+        {
+          m_audioStreamId = i;
+          m_fmt_ctx->streams[i]->codec->refcounted_frames = 1;
+          auto* decoder = avcodec_find_decoder(m_fmt_ctx->streams[i]->codec->codec_id);
+          if(!decoder)
+          {
+              std::cout << "Could not find the audio decoder for stream id " << i << std::endl;
+          }
+          PRINT_DEBUG_VideoReader("Init audio decoder for stream id " << i);
+          if ((ret = avcodec_open2(m_fmt_ctx->streams[i]->codec, decoder, nullptr)) < 0)
+          {
+              std::cout << "Could not open the decoder for stream id " << i << std::endl;
+          }
+          std::cout << "Got an Audio track" << std::endl;
+
+          //start sound
+          m_audioSwrCtx = avresample_alloc_context();
+          av_opt_set_int(m_audioSwrCtx, "in_channel_layout",
+                         m_fmt_ctx->streams[i]->codec->channel_layout, 0);
+          av_opt_set_int(m_audioSwrCtx, "in_sample_fmt",
+                         m_fmt_ctx->streams[i]->codec->sample_fmt, 0);
+          av_opt_set_int(m_audioSwrCtx, "in_sample_rate",
+                         m_fmt_ctx->streams[i]->codec->sample_rate, 0);
+
+          av_opt_set_int(m_audioSwrCtx, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
+          av_opt_set_int(m_audioSwrCtx, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
+          av_opt_set_int(m_audioSwrCtx, "out_sample_rate", 44100, 0);
+
+          if (avresample_open(m_audioSwrCtx) < 0)
+          {
+            std::cerr << "Cannot open avresample" << std::endl;
+            m_audioSwrCtx = nullptr;
+          }
+        }
     }
     m_outputFrames.SetTotal(nbFrames);
+    m_outputAudioFrames.SetTotal(5*nbFrames);
+    std::cout << "Nb frames = " << nbFrames << std::endl;
     m_doneVect = std::vector<bool>(1, false);
     m_gotOne = std::vector<bool>(1, false);
 
@@ -154,40 +208,124 @@ void VideoReader::Init(unsigned nbFrames)
     m_decodingThread = std::thread(&VideoReader::RunDecoderThread, this);
 }
 
-// static bool AllDone(const std::vector<bool>& vect)
-// {
-//     bool r = true;
-//     for (auto b: vect)
-//     {
-//         r &= b;
-//     }
-//     return r;
-// }
+void VideoReader::Audio_callback(void* userdata, unsigned char* stream, int len)
+{
+    auto* videoReader = static_cast<VideoReader*>(userdata);
 
-// static std::shared_ptr<cv::Mat> ToMat(AVCodecContext* codecCtx, AVFrame* frame_ptr)
-// {
-//     int w = codecCtx->width;
-//     int h = codecCtx->height;
-//     struct SwsContext* convert_ctx;
-//     convert_ctx = sws_getContext(w, h, codecCtx->pix_fmt, w, h, AV_PIX_FMT_BGR24, SWS_FAST_BILINEAR,
-//         NULL, NULL, NULL);
-//     if(convert_ctx == NULL)
-//     {
-//         std::cout << "Cannot initialize the conversion context!" << std::endl;
-//     }
-//     AVFrame* frame_ptr2 = av_frame_alloc();
-//     av_image_alloc(frame_ptr2->data, frame_ptr2->linesize, w, h, AV_PIX_FMT_BGR24, 1);
-//     sws_scale(convert_ctx, frame_ptr->data, frame_ptr->linesize, 0, h, frame_ptr2->data, frame_ptr2->linesize);
-//     cv::Mat mat(codecCtx->height, codecCtx->width, CV_8UC3, frame_ptr2->data[0], frame_ptr2->linesize[0]);
-//
-//     auto returnMat = std::make_shared<cv::Mat>(mat.clone());
-//     av_freep(&frame_ptr2->data[0]);
-//     av_frame_unref(frame_ptr2);
-//     av_frame_free(&frame_ptr2);
-//     mat.release();
-//     sws_freeContext(convert_ctx);
-//     return returnMat;
-// }
+    auto now = std::chrono::system_clock::now();
+    auto deadline = std::chrono::system_clock::time_point(now - videoReader->m_startDisplayTime);
+
+    while(len > 0)
+    {
+      std::shared_ptr<AudioFrame> audioFrame = videoReader->m_lastPlayedAudioFrame;
+      bool done = audioFrame != nullptr;
+      if (done)
+      {//Test if the lastPlayedAudioFrame is still valid
+        auto pts = audioFrame->GetDisplayTimestamp();
+        if (pts > deadline)
+        { // not valid anymore, we will try to get a new one
+          done = false;
+          audioFrame = nullptr;
+          videoReader->m_lastPlayedAudioFrame = nullptr;
+        }
+      }
+      while(!done)
+      {
+        auto tmp_audioFrame = videoReader->m_outputAudioFrames.Get();
+        if (tmp_audioFrame != nullptr)
+        {
+          auto pts = tmp_audioFrame->GetDisplayTimestamp();
+          if (pts < deadline)
+          {
+            audioFrame = tmp_audioFrame;
+            videoReader->m_outputAudioFrames.Pop();
+          }
+          else
+          {
+            done = true;
+          }
+        }
+        else
+        {
+          done = true;
+        }
+      }
+      if (audioFrame != nullptr && audioFrame->IsValid())
+      {
+        //std::cout << "Audio frame \n";
+        auto pts = audioFrame->GetDisplayTimestamp();
+        //std::cout << pts.time_since_epoch().count() << " < " << deadline.time_since_epoch().count() << "\n";
+        if (audioFrame->SetOutputAudioBuff(stream, len))
+        {
+          videoReader->m_lastPlayedAudioFrame = audioFrame;
+        }
+        else
+        {
+          videoReader->m_lastPlayedAudioFrame = nullptr;
+        }
+      }
+      else
+      {
+        memset(stream, 0x00, len);
+        len = 0;
+      }
+    }
+
+
+    // long len1, audio_size;
+    // double pts;
+    //
+    // while(len > 0) {
+    //     if(is->audio_buf_index >= is->audio_buf_size) {
+    //         /* We have already sent all our data; get more */
+    //         audio_size = audio_decode_frame(is, &pts);
+    //
+    //         if(audio_size < 0) {
+    //             /* If error, output silence */
+    //             is->audio_buf_size = 1024;
+    //             memset(is->audio_buf, 0, is->audio_buf_size);
+    //
+    //         } else {
+    //             is->audio_buf_size = audio_size;
+    //         }
+    //
+    //         is->audio_buf_index = 0;
+    //     }
+    //
+    //     len1 = is->audio_buf_size - is->audio_buf_index;
+    //
+    //     if(len1 > len) {
+    //         len1 = len;
+    //     }
+    //
+    //     memcpy(stream, (uint8_t *)is->audio_buf + is->audio_buf_index, len1);
+    //     len -= len1;
+    //     stream += len1;
+    //     is->audio_buf_index += len1;
+    // }
+}
+
+void VideoReader::InitAudio(void)
+{
+  if (m_audioStreamId != size_t(-1))
+  {
+    std::cout << "Audio stream detected: init SDL audio" << std::endl;
+    SDL_AudioSpec wanted_spec, spec;
+    wanted_spec.freq = m_fmt_ctx->streams[m_audioStreamId]->codec->sample_rate;
+    wanted_spec.format = AUDIO_S16SYS;
+    wanted_spec.channels = m_fmt_ctx->streams[m_audioStreamId]->codec->channels;
+    wanted_spec.silence = 0;
+    wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;
+    wanted_spec.callback = &VideoReader::Audio_callback;
+    wanted_spec.userdata = this;
+
+    if (SDL_OpenAudio(&wanted_spec, &spec) < 0)
+    {
+      std::cerr << "SDL_OpenAudio: " <<  SDL_GetError() << "\n";
+      throw(std::invalid_argument("Impossible to init Audio with the SDL"));
+    }
+  }
+}
 
 void VideoReader::RunDecoderThread(void)
 {
@@ -197,104 +335,143 @@ void VideoReader::RunDecoderThread(void)
     while ((ret = av_read_frame(m_fmt_ctx, &pkt)) >= 0)
     {
         unsigned streamId = pkt.stream_index;
-        if (m_streamIdToVecId.count(streamId) > 0 && !m_doneVect[m_streamIdToVecId[streamId]])
-        { //then the pkt belong to a stream we care about.
-            PRINT_DEBUG_VideoReader("Got a pkt for streamId "<<streamId)
-            const AVPacket* const packet_ptr = &pkt;
-            bool got_a_frame = false;
-            auto* codecCtx = m_fmt_ctx->streams[streamId]->codec;
-            PRINT_DEBUG_VideoReader("Send the packet to decoder for streamId "<<streamId)
-            ret = avcodec_send_packet(codecCtx, packet_ptr);
-            if (ret == 0)
-            {//success to send packet
-                while(true)
-                {
-                  PRINT_DEBUG_VideoReader("Ask if a frame is available for streamId " <<streamId)
-                  auto frame = std::make_shared<Frame>();
-                  ret = frame->AvCodecReceiveFrame(codecCtx);
-                  got_a_frame = got_a_frame || (ret == 0);
-                  if (ret == 0)
+        if (streamId == m_videoStreamId)
+        {
+          if (m_streamIdToVecId.count(streamId) > 0 && !m_doneVect[m_streamIdToVecId[streamId]])
+          { //then the pkt belong to a stream we care about.
+              PRINT_DEBUG_VideoReader("Got a pkt for streamId "<<streamId)
+              const AVPacket* const packet_ptr = &pkt;
+              bool got_a_frame = false;
+              auto* codecCtx = m_fmt_ctx->streams[streamId]->codec;
+              PRINT_DEBUG_VideoReader("Send the packet to decoder for streamId "<<streamId)
+              ret = avcodec_send_packet(codecCtx, packet_ptr);
+              if (ret == 0)
+              {//success to send packet
+                  while(true)
                   {
-                      frame->SetTimeBase(m_fmt_ctx->streams[streamId]->time_base);
-                      PRINT_DEBUG_VideoReader("Got a frame for streamId " <<streamId)
-                      m_gotOne[m_streamIdToVecId[streamId]] = true;
-                      //m_outputFrames[m_streamIdToVecId[streamId]].push(std::move(frame));
-                      if (!m_outputFrames.Add(std::move(frame)))
-                      {
-                        std::cout << "Decoding thread stopped: frame limite exceed\n";
-                        return;
-                      }
+                    PRINT_DEBUG_VideoReader("Ask if a frame is available for streamId " <<streamId)
+                    auto frame = std::make_shared<VideoFrame>();
+                    ret = frame->AvCodecReceiveFrame(codecCtx);
+                    got_a_frame = got_a_frame || (ret == 0);
+                    if (ret == 0)
+                    {
+                        frame->SetTimeBase(m_fmt_ctx->streams[streamId]->time_base);
+                        PRINT_DEBUG_VideoReader("Got a frame for streamId " <<streamId)
+                        m_gotOne[m_streamIdToVecId[streamId]] = true;
+                        //m_outputFrames[m_streamIdToVecId[streamId]].push(std::move(frame));
+                        if (!m_outputFrames.Add(std::move(frame)))
+                        {
+                          std::cout << "Decoding thread stopped: frame limite exceed\n";
+                          return;
+                        }
+                    }
+                    else
+                    {
+                      PRINT_DEBUG_VideoReader("No frame available for streamId " <<streamId)
+                      break;
+                    }
                   }
-                  else
-                  {
-                    PRINT_DEBUG_VideoReader("No frame available for streamId " <<streamId)
-                    break;
-                  }
-                }
-            }
-            //m_doneVect[m_streamIdToVecId[streamId]] = (m_gotOne[m_streamIdToVecId[streamId]] && (!got_a_frame)) || (m_outputFrames[m_streamIdToVecId[streamId]].size() >= m_nbFrames);
+              }
+              //m_doneVect[m_streamIdToVecId[streamId]] = (m_gotOne[m_streamIdToVecId[streamId]] && (!got_a_frame)) || (m_outputFrames[m_streamIdToVecId[streamId]].size() >= m_nbFrames);
+          }
+        }
+        else if (streamId == m_audioStreamId)
+        {
+          PRINT_DEBUG_VideoReader("Got an audio pkt for streamId "<<streamId)
+          const AVPacket* const packet_ptr = &pkt;
+          bool got_a_frame = false;
+          auto* codecCtx = m_fmt_ctx->streams[streamId]->codec;
+          PRINT_DEBUG_VideoReader("Send the audio packet to decoder for streamId "<<streamId)
+          auto audioFrame = std::make_shared<AudioFrame>();
+          auto ret = audioFrame->AvCodecReceiveAudioFrame(codecCtx, m_audioSwrCtx, packet_ptr);
+          if (ret > 0)
+          {
+            audioFrame->SetTimeBase(m_fmt_ctx->streams[streamId]->time_base);
+            m_outputAudioFrames.Add(audioFrame);
+          }
         }
         av_packet_unref(&pkt);
     }
     { //flush all the rest
         PRINT_DEBUG_VideoReader("Start to flush")
-        unsigned streamVectId = 0;
-        for (auto i = 0; i < 1; ++i)
+        if (m_videoStreamId != size_t(-1))
         {
           //send flush signal
-          PRINT_DEBUG_VideoReader("Send flush signal for streamId "<<i)
-          avcodec_send_packet(m_fmt_ctx->streams[m_videoStreamIds[i]]->codec, nullptr);
-        }
-        while(true)//we decode all the reste of the frames
-        {
-            if (!m_doneVect[streamVectId])
-            {
+          PRINT_DEBUG_VideoReader("Send flush signal for streamId "<<m_videoStreamId)
+          avcodec_send_packet(m_fmt_ctx->streams[m_videoStreamIds[m_videoStreamId]]->codec, nullptr);
+          while(true)//we decode all the reste of the frames
+          {
+              if (!m_doneVect[m_videoStreamId])
+              {
 
-                bool got_a_frame = false;
-                auto* codecCtx = m_fmt_ctx->streams[m_videoStreamIds[streamVectId]]->codec;
-                PRINT_DEBUG_VideoReader("Ask for next frame for streamVectId "<<streamVectId)
-                auto frame = std::make_shared<Frame>();
-                int ret = frame->AvCodecReceiveFrame(m_fmt_ctx->streams[m_videoStreamIds[streamVectId]]->codec);
-                got_a_frame = ret == 0;
-                if (got_a_frame)
-                {
-                    PRINT_DEBUG_VideoReader("Got a frame for streamVectId "<<streamVectId)
-                    if(!m_outputFrames.Add(std::move(frame)))
-                    {
-                      std::cout << "Decoding thread stopped: frame limite exceed\n";
-                      return;
-                    }
-                    //m_outputFrames[streamVectId].emplace();
-                }
-                else
-                {
-                  std::cout << "Decoding thread stopped: video done\n";
-                  m_outputFrames.SetTotal(0);
-                  return;
-                }
-                //m_doneVect[streamVectId] = (!got_a_frame) || (m_outputFrames[streamVectId].size() >= m_nbFrames);
-                //streamVectId = (streamVectId + 1) % m_outputFrames.size();
-            }
+                  bool got_a_frame = false;
+                  auto* codecCtx = m_fmt_ctx->streams[m_videoStreamIds[m_videoStreamId]]->codec;
+                  PRINT_DEBUG_VideoReader("Ask for next frame for streamVectId "<<m_videoStreamId)
+                  auto frame = std::make_shared<VideoFrame>();
+                  int ret = frame->AvCodecReceiveFrame(m_fmt_ctx->streams[m_videoStreamIds[m_videoStreamId]]->codec);
+                  got_a_frame = ret == 0;
+                  if (got_a_frame)
+                  {
+                      PRINT_DEBUG_VideoReader("Got a frame for streamVectId "<<m_videoStreamId)
+                      if(!m_outputFrames.Add(std::move(frame)))
+                      {
+                        std::cout << "Decoding thread stopped: frame limite exceed\n";
+                        return;
+                      }
+                      //m_outputFrames[streamVectId].emplace();
+                  }
+                  else
+                  {
+                    std::cout << "Decoding thread stopped: video done\n";
+                    m_outputFrames.SetTotal(0);
+                    return;
+                  }
+                  //m_doneVect[streamVectId] = (!got_a_frame) || (m_outputFrames[streamVectId].size() >= m_nbFrames);
+                  //streamVectId = (streamVectId + 1) % m_outputFrames.size();
+              }
+          }
+        }
+        if (m_audioStreamId != size_t(-1))
+        {
+          //send flush signal
+          PRINT_DEBUG_VideoReader("Send flush signal for streamId "<<m_audioStreamId)
+          avcodec_send_packet(m_fmt_ctx->streams[m_audioStreamId]->codec, nullptr);
+          while(true)//we decode all the reste of the frames
+          {
+              bool got_a_frame = false;
+              auto* codecCtx = m_fmt_ctx->streams[m_audioStreamId]->codec;
+              PRINT_DEBUG_VideoReader("Ask for next frame for streamVectId "<<m_audioStreamId)
+              auto audioFrame = std::make_shared<AudioFrame>();
+              int ret = audioFrame->AvCodecReceiveAudioFrame(codecCtx, m_audioSwrCtx, nullptr);
+              got_a_frame = ret == 0;
+              if (got_a_frame)
+              {
+                audioFrame->SetTimeBase(m_fmt_ctx->streams[m_audioStreamId]->time_base);
+                m_outputAudioFrames.Add(audioFrame);
+              }
+              else
+              {
+                std::cout << "Decoding thread stopped: audio done\n";
+                m_outputAudioFrames.SetTotal(0);
+                return;
+              }
+          }
         }
     }
 }
 
-//#ifdef USE_OPENGL
-IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::system_clock::time_point deadline)
+IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(std::chrono::system_clock::time_point deadline)
 {
     bool first = (m_swsCtx == nullptr);
     bool last = false;
     auto pts = std::chrono::system_clock::time_point(std::chrono::seconds(-1));
     size_t nbUsed = 0;
-    if (streamId < 1)
+    if (0 < 1)
     {
         if (!m_outputFrames.IsAllDones())
         {
-            PRINT_DEBUG_VideoReader("Forward next picture for streamId "<<streamId)
-            // auto matPtr = m_outputFrames[streamId].front();
-            // m_outputFrames[streamId].pop();
-            // return matPtr;
-            std::shared_ptr<Frame> frame(nullptr);
+            PRINT_DEBUG_VideoReader("Update video picture")
+            std::shared_ptr<VideoFrame> frame(nullptr);
             bool done = false;
             while(!done)
             {
@@ -316,22 +493,23 @@ IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned stream
               }
               else
               {
-                //std::cout << "No more frames \n";
                 done = true;
-                //last = true;
               }
             }
 
-            // if (nbUsed > 1)
-            // {
-            //   std::cout << "Nb dropped frame: " << nbUsed-1 << std::endl;
-            // }
             if (frame != nullptr && frame->IsValid())
             {
               auto w = frame->GetWidth();
               auto h = frame->GetHeight();
               if (first)
               {
+                if (m_audioStreamId != size_t(-1))
+                {
+                  std::cout << "Start the audio\n";
+                  SDL_PauseAudio(0);
+                }
+
+
                 m_swsCtx = sws_getContext(w, h,
                                   AV_PIX_FMT_YUV420P, w, h,
                                   AV_PIX_FMT_RGB24, 0, 0, 0, 0);
@@ -340,8 +518,6 @@ IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned stream
               }
               //transform from YUV420p domain to RGB domain
               sws_scale(m_swsCtx, frame->GetDataPtr(), frame->GetRowLength(), 0, h, m_frame_ptr2->data, m_frame_ptr2->linesize);
-
-              //m_lastDisplayedPictureNumber = frame->GetDisplayPictureNumber();
 
               if (first)
               {
@@ -363,13 +539,16 @@ IMT::DisplayFrameInfo VideoReader::SetNextPictureToOpenGLTexture(unsigned stream
             else if (frame != nullptr && !frame->IsValid())
             {
               last = true;
+              //Stop sound
+              SDL_PauseAudio(1);
             }
         }
         else
         {
           last = true;
+          //Stop sound
+          SDL_PauseAudio(1);
         }
     }
     return {m_lastDisplayedPictureNumber, nbUsed > 0 ? nbUsed - 1 : 0, deadline, pts, last};
 }
-//#endif

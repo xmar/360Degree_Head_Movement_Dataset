@@ -17,6 +17,8 @@ public:
       m_pathToVideo(pathToVideo), m_videoReader(pathToVideo, bufferSize)
       {m_videoReader.Init(nbFrame);}
   virtual ~ShaderTextureVideo(void) = default;
+  virtual void InitAudio(void) override {m_videoReader.InitAudio();}
+  virtual void SetStartTime(std::chrono::system_clock::time_point startTime) {m_videoReader.SetStartTime(std::move(startTime));}
 private:
   std::string m_pathToVideo;
   LibAv::VideoReader m_videoReader;

@@ -14,6 +14,7 @@ extern "C"
     #include <libavformat/avio.h>
     #include <libavutil/file.h>
     #include <libswscale/swscale.h>
+    #include <libavresample/avresample.h>
 }
 
 #include "Buffer.hpp"
@@ -22,7 +23,8 @@ extern "C"
 namespace IMT {
 namespace LibAv {
 
-class Frame;
+class VideoFrame;
+class AudioFrame;
 
 class VideoReader
 {
@@ -34,14 +36,17 @@ class VideoReader
         virtual ~VideoReader(void);
 
         void Init(unsigned nbFrames);
+        void InitAudio(void);
 
         //#ifdef USE_OPENGL
         //Update the current binded OpenGL Texture object with the content of the next picture (if right deadline)
         //return the current frame info
-        IMT::DisplayFrameInfo SetNextPictureToOpenGLTexture(unsigned streamId, std::chrono::system_clock::time_point deadline);
+        IMT::DisplayFrameInfo SetNextPictureToOpenGLTexture(std::chrono::system_clock::time_point deadline);
         //#endif
 
         unsigned GetNbStream(void) const {return m_videoStreamIds.size();}
+
+        void SetStartTime(std::chrono::system_clock::time_point startTime) {m_startDisplayTime = std::move(startTime);}
 
     protected:
 
@@ -50,20 +55,23 @@ class VideoReader
         AVFormatContext* m_fmt_ctx;
         std::vector<unsigned int> m_videoStreamIds;
         std::map<unsigned int, unsigned int> m_streamIdToVecId;
-        //First version: we totaly decode the video and store in a vector the output frames
-        //std::vector<std::queue<std::shared_ptr<cv::Mat>>> m_outputFrames;
-        //std::vector<std::queue<std::shared_ptr<Frame>>> m_outputFrames;
-        IMT::Buffer<Frame> m_outputFrames;
+        IMT::Buffer<VideoFrame> m_outputFrames;
+        IMT::Buffer<AudioFrame> m_outputAudioFrames;
         unsigned m_nbFrames;
         std::vector<bool> m_doneVect;
         std::vector<bool> m_gotOne;
-        std::chrono::system_clock::time_point m_startDisplayTime;
+        std::chrono::system_clock::time_point m_startDisplayTime; //this time will be used to sync the video and the audio. The master clock is the system_clock
         struct SwsContext* m_swsCtx;
+        AVAudioResampleContext* m_audioSwrCtx;
         AVFrame* m_frame_ptr2;
         std::thread m_decodingThread;
         size_t m_lastDisplayedPictureNumber;
+        size_t m_videoStreamId;
+        size_t m_audioStreamId;
+        std::shared_ptr<AudioFrame> m_lastPlayedAudioFrame;
 
         void RunDecoderThread(void);
+        static void Audio_callback(void* userdata, unsigned char* stream, int len);
 };
 }
 }
