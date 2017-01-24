@@ -354,7 +354,6 @@ void VideoReader::InitAudio(void)
       std::cerr << "SDL_OpenAudio: " <<  SDL_GetError() << "\n";
       throw(std::invalid_argument("Impossible to init Audio with the SDL"));
     }
-    std::cout << "wanted_spec.freq " << wanted_spec.freq << " spec.freq " << spec.freq << std::endl;
   }
 }
 

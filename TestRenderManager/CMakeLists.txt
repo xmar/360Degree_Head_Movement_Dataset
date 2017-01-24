@@ -14,6 +14,7 @@ find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(osvrRenderManager REQUIRED)
+find_package(ZMQ REQUIRED)
 osvrrm_find_SDL2()
 osvrrm_find_GLEW()
 
@@ -39,6 +40,7 @@ target_include_directories(OSVRClientTest PUBLIC
     ${OPENGL_INCLUDE_DIRS}
     ${SDL2_INCLUDE_DIRS}
     ${SOIL_INCLUDE_DIRS}
+    ${ZMQ_INCLUDE_DIRS}
 )
 target_link_libraries(OSVRClientTest
     osvr::osvrClientKitCpp
@@ -52,4 +54,5 @@ target_link_libraries(OSVRClientTest
     ${SDL2_LIBRARIES}
     ${OPENGL_LIBRARIES}
     ${OSVR_LIBRARIES}
+    ${ZMQ_LIBRARIES}
   )

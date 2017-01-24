@@ -56,6 +56,7 @@
 #include "ConfigParser.hpp"
 #include "LogWriter.hpp"
 #include "Quaternion.hpp"
+#include "PublisherLogMQ.hpp"
 
 using namespace IMT;
 
@@ -63,6 +64,7 @@ using namespace IMT;
 static std::shared_ptr<ShaderTexture> sampleShader(nullptr);
 static std::shared_ptr<Mesh> roomMesh(nullptr);
 static std::shared_ptr<LogWriter> logWriter(nullptr);
+static std::shared_ptr<PublisherLogMQ> publisherLogMQ(nullptr);
 static bool firstFrame = true;
 constexpr std::chrono::system_clock::time_point zero(std::chrono::nanoseconds(0));
 static std::chrono::system_clock::time_point global_startDisplayTime(zero);
@@ -255,6 +257,7 @@ void DrawWorld(
     lastDisplayedFrame = frameInfo.m_frameDisplayId;
     lastNbDroppedFrame += frameInfo.m_nbDroppedFrame;
     logWriter->AddLog(Log(frameInfo.m_timestamp, frameInfo.m_pts, rot, frameInfo.m_frameDisplayId));
+    publisherLogMQ->SendMessage(POSITION_INFO, "Send something");
     if (frameInfo.m_last)
     {
       logWriter->Stop();
@@ -303,6 +306,7 @@ int main(int argc, char* argv[]) {
       roomMesh = configParser.GetMesh();
       sampleShader = configParser.GetShaderTexture();
       logWriter = configParser.GetLogWriter();
+      publisherLogMQ = configParser.GetPublisherLogMQ();
 
       // Get an OSVR client context to use to access the devices
       // that we need.
@@ -366,11 +370,12 @@ int main(int argc, char* argv[]) {
       sampleShader->InitAudio();
 
       //Sleep 5 seconds to give time for the decoder to start properly
-      std::this_thread::sleep_for(std::chrono::seconds(5));
+      std::this_thread::sleep_for(std::chrono::seconds(1));
       global_startDisplayTime = zero;
       started = true;
 
       std::cout << "Start player the video\n";
+      publisherLogMQ->SendMessage(APP_STATUS, "Started");
 
       // Frame timing
       size_t countFrames = 0;
@@ -397,9 +402,16 @@ int main(int argc, char* argv[]) {
           constexpr std::chrono::seconds twoSeconds(2);
           if (duration >= twoSeconds)
           {
-            std::cout << "\033[2K\r" << "Rendering at " << countFrames / std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count()
-              << " fps; Video displayed at " << (lastDisplayedFrame-startDisplayedFrame - lastNbDroppedFrame)/std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count()
-              << " fps ( felt fps: " << (lastDisplayedFrame-startDisplayedFrame)/std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count() << " fps)" << std::flush;
+            std::string message = "Rendering at "
+                + std::to_string(countFrames / std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count())
+                + " fps; Video displayed at "
+                + std::to_string((lastDisplayedFrame-startDisplayedFrame - lastNbDroppedFrame)/std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count())
+                + " fps ( felt fps: "
+                + std::to_string((lastDisplayedFrame-startDisplayedFrame)/std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count())
+                + " fps)"
+                ;
+            std::cout << "\033[2K\r" << message << std::flush;
+            publisherLogMQ->SendMessage(FPS_INFO, message);
             startTime = nowTime;
             startDisplayedFrame = lastDisplayedFrame;
             lastNbDroppedFrame = 0;

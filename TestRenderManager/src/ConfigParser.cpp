@@ -7,6 +7,7 @@
 #include "ShaderTextureStatic.hpp"
 #include "ShaderTextureVideo.hpp"
 #include "LogWriter.hpp"
+#include "PublisherLogMQ.hpp"
 
 //Library includes
 #include <boost/property_tree/ptree.hpp>
@@ -29,6 +30,7 @@ void ConfigParser::Init(void)
   auto textureConfig = pt.get<std::string>("Config.textureConfig");
   auto projectionConfig = pt.get<std::string>("Config.projectionConfig");
   auto logWriterConfig = pt.get<std::string>("Config.logWriterConfig");
+  auto publisherLogConfig = pt.get<std::string>("Config.publisherLogConfig");
 
   std::cout << "Parse the texture configuration: section "<< textureConfig <<"\n";
 
@@ -74,4 +76,10 @@ void ConfigParser::Init(void)
   auto logWriterOutputDirPath = pt.get<std::string>(logWriterConfig+".outputDirPath");
   auto logWriterOutputId = pt.get<std::string>(logWriterConfig+".outputId");
   m_outputLogWriter = std::make_shared<LogWriter>(logWriterOutputDirPath, logWriterOutputId);
+
+  std::cout << "Parse the publisher log configuration: section "<< publisherLogConfig << "\n";
+
+  auto publisherLogPort = pt.get<size_t>(publisherLogConfig+".port");
+  m_outputPublisherLogMQ = std::make_shared<PublisherLogMQ>();
+  m_outputPublisherLogMQ->Init(publisherLogPort);
 }
