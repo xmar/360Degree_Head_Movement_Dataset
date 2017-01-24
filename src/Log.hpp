@@ -2,7 +2,7 @@
  Author: Xavier Corbillon
  IMT Atlantique
 
- This class manage a head position Log
+ The class represent one Log line (Head position at a specific time for a specific video frame)
 */
 #pragma once
 
@@ -10,18 +10,21 @@
 #include "Quaternion.hpp"
 #include "Timestamp.hpp"
 
+//standard includes
+#include <iostream>
+
 namespace IMT {
 
 class Log
 {
 public:
-  Log(Timestamp t, Quaternion q): m_t(t), m_q(q) {};
+  Log(Timestamp t, Timestamp pts, Quaternion q, size_t frameId): m_t(t), m_pts(pts), m_q(q), m_frameId(frameId) {};
 
   const Timestamp& GetTimestamp(void) const {return m_t;};
   const Quaternion& GetQuat(void) const {return m_q;};
   friend std::ostream& operator<< (std::ostream& stream, const Log& log)
   {
-    stream << log.m_t << " " << log.m_q;
+    stream << log.m_t << " " << log.m_frameId << " " << log.m_pts << " " << log.m_q;
   }
   Log operator-(const Timestamp& t) const
   {
@@ -31,6 +34,9 @@ public:
   }
 private:
   Timestamp m_t;
+  Timestamp m_pts;
   Quaternion m_q;
+  size_t m_frameId;
 };
+
 }

@@ -2,23 +2,31 @@
  Author: Xavier Corbillon
  IMT Atlantique
 
- This class store a timestamp
+ This class manage a Timestamp for the logs
 */
 #pragma once
 
-//library includes
-#include <osvr/Util/TimeValueC.h>
-
-// Standard includes
+//standard includes
+#include <chrono>
 #include <iostream>
 #include <iomanip>
 
 namespace IMT {
+
 class Timestamp
 {
 public:
   Timestamp(long seconds, long microseconds): m_seconds(seconds), m_microseconds(microseconds) {}
-  Timestamp(const OSVR_TimeValue& time): m_seconds(time.seconds), m_microseconds(time.microseconds) {}
+  //Timestamp(const OSVR_TimeValue& time): m_seconds(time.seconds), m_microseconds(time.microseconds) {}
+  Timestamp(std::chrono::system_clock::time_point tp): m_seconds(0), m_microseconds(0)
+  {
+    using namespace std::chrono;
+    auto duration = tp.time_since_epoch();
+    seconds s = duration_cast<seconds>(duration);
+    microseconds m = duration_cast<microseconds>(duration-s);
+    m_seconds = s.count();
+    m_microseconds = m.count();
+  }
   ~Timestamp(void) = default;
 
   const long& GetSec(void) const {return m_seconds;}
@@ -50,4 +58,5 @@ private:
   long m_seconds;
   long m_microseconds;
 };
+
 }
