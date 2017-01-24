@@ -31,7 +31,6 @@ extern "C"
 }
 
 constexpr size_t SDL_AUDIO_BUFFER_SIZE = 1024;
-constexpr size_t MAX_AUDIO_FRAME_SIZE = 192000;
 
 using namespace IMT::LibAv;
 
@@ -166,6 +165,8 @@ void VideoReader::Init(unsigned nbFrames)
         {
           m_audioStreamId = i;
           m_fmt_ctx->streams[i]->codec->refcounted_frames = 1;
+          m_fmt_ctx->streams[i]->codec->request_sample_fmt = AV_SAMPLE_FMT_S16;
+
           auto* decoder = avcodec_find_decoder(m_fmt_ctx->streams[i]->codec->codec_id);
           if(!decoder)
           {
@@ -178,18 +179,44 @@ void VideoReader::Init(unsigned nbFrames)
           }
           std::cout << "Got an Audio track" << std::endl;
 
-          //start sound
-          m_audioSwrCtx = avresample_alloc_context();
-          av_opt_set_int(m_audioSwrCtx, "in_channel_layout",
-                         m_fmt_ctx->streams[i]->codec->channel_layout, 0);
-          av_opt_set_int(m_audioSwrCtx, "in_sample_fmt",
-                         m_fmt_ctx->streams[i]->codec->sample_fmt, 0);
-          av_opt_set_int(m_audioSwrCtx, "in_sample_rate",
-                         m_fmt_ctx->streams[i]->codec->sample_rate, 0);
 
-          av_opt_set_int(m_audioSwrCtx, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
-          av_opt_set_int(m_audioSwrCtx, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
-          av_opt_set_int(m_audioSwrCtx, "out_sample_rate", 44100, 0);
+          // Some MP3/WAV don't tell this so make assumtion that
+          // They are stereo not 5.1
+          if (m_fmt_ctx->streams[i]->codec->channel_layout == 0
+                  && m_fmt_ctx->streams[i]->codec->channels == 2)
+          {
+              m_fmt_ctx->streams[i]->codec->channel_layout = AV_CH_LAYOUT_STEREO;
+          }
+          else if (m_fmt_ctx->streams[i]->codec->channel_layout == 0
+                     && m_fmt_ctx->streams[i]->codec->channels == 1)
+          {
+              m_fmt_ctx->streams[i]->codec->channel_layout = AV_CH_LAYOUT_MONO;
+          }
+          else if (m_fmt_ctx->streams[i]->codec->channel_layout == 0
+                     && m_fmt_ctx->streams[i]->codec->channels == 0)
+          {
+              m_fmt_ctx->streams[i]->codec->channel_layout = AV_CH_LAYOUT_STEREO;
+              m_fmt_ctx->streams[i]->codec->channels = 2;
+          }
+
+          //init resampler
+          if (m_fmt_ctx->streams[i]->codec->sample_fmt != AV_SAMPLE_FMT_S16)
+          {
+            m_audioSwrCtx = avresample_alloc_context();
+            av_opt_set_int(m_audioSwrCtx, "in_channel_layout",
+                           m_fmt_ctx->streams[i]->codec->channel_layout, 0);
+           av_opt_set_int(m_audioSwrCtx, "in_channels",
+                          m_fmt_ctx->streams[i]->codec->channels, 0);
+            av_opt_set_int(m_audioSwrCtx, "in_sample_fmt",
+                           m_fmt_ctx->streams[i]->codec->sample_fmt, 0);
+            av_opt_set_int(m_audioSwrCtx, "in_sample_rate",
+                           m_fmt_ctx->streams[i]->codec->sample_rate, 0);
+
+            av_opt_set_int(m_audioSwrCtx, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
+            av_opt_set_int(m_audioSwrCtx, "out_channels", 2, 0);
+            av_opt_set_int(m_audioSwrCtx, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
+            av_opt_set_int(m_audioSwrCtx, "out_sample_rate", m_fmt_ctx->streams[i]->codec->sample_rate, 0);
+          }
 
           if (avresample_open(m_audioSwrCtx) < 0)
           {
@@ -211,6 +238,8 @@ void VideoReader::Init(unsigned nbFrames)
 void VideoReader::Audio_callback(void* userdata, unsigned char* stream, int len)
 {
     auto* videoReader = static_cast<VideoReader*>(userdata);
+
+    SDL_memset(stream, 0, len);  // make sure this is silence.
 
     auto now = std::chrono::system_clock::now();
     auto deadline = std::chrono::system_clock::time_point(now - videoReader->m_startDisplayTime);
@@ -311,9 +340,10 @@ void VideoReader::InitAudio(void)
   {
     std::cout << "Audio stream detected: init SDL audio" << std::endl;
     SDL_AudioSpec wanted_spec, spec;
+    SDL_zero(wanted_spec);
     wanted_spec.freq = m_fmt_ctx->streams[m_audioStreamId]->codec->sample_rate;
     wanted_spec.format = AUDIO_S16SYS;
-    wanted_spec.channels = m_fmt_ctx->streams[m_audioStreamId]->codec->channels;
+    wanted_spec.channels = 2;//m_fmt_ctx->streams[m_audioStreamId]->codec->channels;
     wanted_spec.silence = 0;
     wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;
     wanted_spec.callback = &VideoReader::Audio_callback;
@@ -324,6 +354,7 @@ void VideoReader::InitAudio(void)
       std::cerr << "SDL_OpenAudio: " <<  SDL_GetError() << "\n";
       throw(std::invalid_argument("Impossible to init Audio with the SDL"));
     }
+    std::cout << "wanted_spec.freq " << wanted_spec.freq << " spec.freq " << spec.freq << std::endl;
   }
 }
 
