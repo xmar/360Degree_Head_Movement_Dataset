@@ -54,6 +54,7 @@ public:
       if (m_queue_producer.size() <= m_maxQueueSize)
       {
         m_queue_producer.push(std::move(t));
+        ++m_nbSeenObjects;
         return true;
       }
       else

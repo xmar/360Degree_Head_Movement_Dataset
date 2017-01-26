@@ -261,6 +261,7 @@ void DrawWorld(
     if (frameInfo.m_last)
     {
       logWriter->Stop();
+      quit = true;
     }
   }
 }
