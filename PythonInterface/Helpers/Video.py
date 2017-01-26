@@ -21,17 +21,21 @@ def md5sum(filePath):
 class Video(object):
     """Class that contains all usefull information usefull on a video."""
 
-    def __init__(self, videoPath, videoId):
+    def __init__(self, videoPath, videoId, nbMaxFrames, bufferSize):
         """Init function. It also compute the md5 sum of the video.
 
         :param videoPath: The absolute or relatif path to the video
         :param videoId: The id use to identify the video
         :type videoPath: str
         :type videoId: str
+        :type nbMaxFrames: int
+        :type bufferSize: int
         """
         self.logger = logging.getLogger('TestManager.Helpers.Video')
         self.path = videoPath
         self.id = videoId
+        self.nbMaxFrames = nbMaxFrames
+        self.bufferSize = bufferSize
         self.md5sum = md5sum(self.path)
         self.logger.info('New video with id {} and MD5 sum {}'.format(
             self.id,

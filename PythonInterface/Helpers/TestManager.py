@@ -57,8 +57,8 @@ class Test(object):
         fileStr += '\n'
         fileStr += '[Video1]\n'
         fileStr += 'type=video\n'
-        fileStr += 'nbFrame=500\n'
-        fileStr += 'bufferSize=100\n'
+        fileStr += 'nbFrame={}\n'.format(self.video.nbMaxFrames)
+        fileStr += 'bufferSize={}\n'.format(self.video.bufferSize)
         fileStr += 'pathToVideo={}\n'.format(self.video.path)
         fileStr += '\n'
         fileStr += '[Equirectangular]\n'

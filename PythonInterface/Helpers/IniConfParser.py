@@ -59,14 +59,26 @@ class IniConfParser(object):
         if len(trainingVideoConfig) > 0:
             videoId = self.config[trainingVideoConfig]['id']
             videoPath = self.config[trainingVideoConfig]['path']
+            nbMaxFrames = self.config[trainingVideoConfig]['nbMaxFrames']
+            bufferSize = self.config[trainingVideoConfig]['bufferSize']
             self.videoManager.SetTrainingContent(
-                Video(videoPath=videoPath, videoId=videoId)
+                Video(videoPath=videoPath,
+                      videoId=videoId,
+                      nbMaxFrames=nbMaxFrames,
+                      bufferSize=bufferSize
+                      )
             )
         for videoConfig in \
                 self.config['AppConfig']['videoConfigList'].split(','):
             videoConfig = videoConfig.strip()
             videoId = self.config[videoConfig]['id']
             videoPath = self.config[videoConfig]['path']
+            nbMaxFrames = self.config[videoConfig]['nbMaxFrames']
+            bufferSize = self.config[videoConfig]['bufferSize']
             self.videoManager.AddVideo(
-                Video(videoPath=videoPath, videoId=videoId)
+                Video(videoPath=videoPath,
+                      videoId=videoId,
+                      nbMaxFrames=nbMaxFrames,
+                      bufferSize=bufferSize
+                      )
             )
