@@ -30,7 +30,9 @@ if __name__ == '__main__':
     ch = logging.StreamHandler()
     ch.setLevel(logging.DEBUG)
     # create formatter and add it to the handlers
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
     # add the handlers to the logger
@@ -51,24 +53,27 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # parse the ini file
-    iniConfParser = Helpers.IniConfParser(args.configFile, ch=ch, fh=fh)
+    iniConfParser = Helpers.GetIniConfParser(args.configFile, ch=ch, fh=fh)
 
     # parse existing user file
     userManager = Helpers.UserManager(os.path.join(iniConfParser.resultFolder,
                                                    '.private_existingUsers.txt'
-                                                   ))
+                                                   ),
+                                      iniConfParser.resultFolder
+                                      )
 
     # Define the GUI window
-    root = tix.Tk()
-    root.tk.eval('package require Tix')
-    root.title('OSVR head position measurement GUI')
+    root = GUIHelpers.GetRootFrame()
     root.resizable(True, True)
 
     # This frame contains the objects used for the questionnaries
-    userSelectionFrame = GUIHelpers.UserSelectionFrame(root,
-                                                       userManager=userManager)
+    userSelectionFrame = \
+        GUIHelpers.UserSelectionFrame(root,
+                                      userManager=userManager,
+                                      videoManager=iniConfParser.videoManager
+                                      )
     # This frame will contains the startup objets
-    mainFrame = GUIHelpers.HomeFrame(
+    mainFrame = GUIHelpers.GetHomeFrame(
         root, userSelectionFrame=userSelectionFrame)
     mainFrame.grid(row=0, column=0)
 

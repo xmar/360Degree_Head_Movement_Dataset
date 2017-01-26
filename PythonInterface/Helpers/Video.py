@@ -26,8 +26,8 @@ class Video(object):
 
         :param videoPath: The absolute or relatif path to the video
         :param videoId: The id use to identify the video
-        :type a: str
-        :type b: str
+        :type videoPath: str
+        :type videoId: str
         """
         self.logger = logging.getLogger('TestManager.Helpers.Video')
         self.path = videoPath

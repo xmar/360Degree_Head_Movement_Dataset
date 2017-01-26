@@ -8,6 +8,8 @@ import logging
 from tkinter import *
 from functools import partial
 
+from .TestConfigurationFrame import TestConfigurationFrame
+
 module_logger = logging.getLogger('TestManager.GUIHelpers.UserSelectionFrame')
 
 
@@ -49,8 +51,9 @@ class ExistingUserFrame(Frame):
             module_logger.info(
                 'Existing user with id {} selected for a new test'.format(
                     uid))
-            self.parent.grid_remove()
-            self.parent.Reset()
+            self.parent.DisplayTestConfiguration(
+                self.userManager.userDict[uid]
+                )
 
 
 class QuestionnaireFrame(Frame):
@@ -85,9 +88,15 @@ class QuestionnaireFrame(Frame):
         module_logger.info('Submit the form button pressed')
         firstName = self.firstNameLabelEntry.subwidget('entry').get()
         lastName = self.lastNameLabelEntry.subwidget('entry').get()
+        uid = None
         if len(firstName) > 0 and len(lastName) > 0:
-            self.parent.userManager.AddNewUser(firstName, lastName)
-        self.parent.parent.Reset()
+            uid = self.parent.userManager.AddNewUser(firstName, lastName)
+        if uid is None:
+            self.parent.parent.Reset()
+        else:
+            self.parent.parent.DisplayTestConfiguration(
+                self.parent.userManager.userDict[uid]
+                )
 
 
 class NewUserFrame(Frame):
@@ -127,10 +136,12 @@ class UserSelectionFrame(Frame):
     (creating a new one after filling a form or using an existing one)
     """
 
-    def __init__(self, *args, userManager, **kwargs):
+    def __init__(self, *args, userManager, videoManager, **kwargs):
         """Init function."""
         Frame.__init__(self, *args, **kwargs)
+        self.parent = args[0]
         self.userManager = userManager
+        self.videoManager = videoManager
         self.existingUserFrame = ExistingUserFrame(self,
                                                    userManager=userManager)
         self.newUserFrame = NewUserFrame(self,
@@ -149,3 +160,16 @@ class UserSelectionFrame(Frame):
     def Update(self):
         """Update the frame. Especialy update the existing user list."""
         self.existingUserFrame.UpdateUserList()
+
+    def DisplayTestConfiguration(self, selectedUser):
+        """Will hide this frame and display the TestConfigurationFrame."""
+        self.grid_remove()
+        self.Reset()
+        module_logger.info('Create the TestConfiguration for uid {}'.format(
+            selectedUser.uid)
+                           )
+        TestConfigurationFrame(self.parent,
+                               videoManager=self.videoManager,
+                               selectedUser=selectedUser).grid(row=0,
+                                                               column=0
+                                                               )

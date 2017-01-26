@@ -10,7 +10,7 @@ import os
 class User(object):
     """Class that contains all usefull information on a user."""
 
-    def __init__(self, userFirstName, userLastName, userId):
+    def __init__(self, userFirstName, userLastName, userId, rootResultFolder):
         """init function.
 
         :type userFirstName: str
@@ -20,12 +20,32 @@ class User(object):
         self.firstName = userFirstName
         self.lastName = userLastName
         self.uid = userId
+        self.userResultFolder = os.path.join(rootResultFolder,
+                                             'uid'+str(self.uid)
+                                             )
 
-    def GetUserResultFolder(self, rootResultFolder):
+    def GetUserResultFolder(self):
         """Return the path to the user result folder.
 
-        :param rootResultFolder: The path to the root of result folder
-        :type rootResultFolder: str
         :rtype: str
         """
-        return os.path.join(rootResultFolder, 'uid'+str(self.uid))
+        return self.userResultFolder
+
+    def GetNumberExistingTest(self):
+        """Number of test that already exist for this user.
+
+        :rtype: int
+        """
+        nbTest = 0
+        for root, dirs, files in os.walk(self.userResultFolder):
+            for name in dirs:
+                if 'test' in name:
+                    nbTest += 1
+        return nbTest
+
+    def GetTestResultFolder(self, testNumber):
+        """Return the path to the test testNumber for this user.
+
+        :rtype: str
+        """
+        return os.path.join(self.userResultFolder, 'test{}'.format(testNumber))

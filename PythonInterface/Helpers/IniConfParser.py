@@ -7,6 +7,17 @@ IMT Atlantique
 import logging
 import configparser
 from .Video import Video
+from .VideoManager import VideoManager
+
+global_initConfParser = None
+
+
+def GetIniConfParser(*args, **kwargs):
+    """Return the global IniConfParser or create it."""
+    global global_initConfParser
+    if global_initConfParser is None:
+        global_initConfParser = IniConfParser(*args, **kwargs)
+    return global_initConfParser
 
 
 class IniConfParser(object):
@@ -25,6 +36,8 @@ class IniConfParser(object):
 
         # the main section is the [AppConfig] section
         self.resultFolder = self.config['AppConfig']['resultFolder']
+        self.pathToOsvrClientPlayer = \
+            self.config['AppConfig']['pathToOsvrClientPlayer']
         if ch is not None:
             consolLogLevel = self.config['AppConfig']['consoleLogLevel']
             ch.setLevel(logging.DEBUG if 'DEBUG' == consolLogLevel
@@ -41,12 +54,19 @@ class IniConfParser(object):
                         else logging.INFO
                         )
 
-        self.videos = dict()
+        self.videoManager = VideoManager()
+        trainingVideoConfig = self.config['AppConfig']['trainingVideo'].strip()
+        if len(trainingVideoConfig) > 0:
+            videoId = self.config[trainingVideoConfig]['id']
+            videoPath = self.config[trainingVideoConfig]['path']
+            self.videoManager.SetTrainingContent(
+                Video(videoPath=videoPath, videoId=videoId)
+            )
         for videoConfig in \
                 self.config['AppConfig']['videoConfigList'].split(','):
             videoConfig = videoConfig.strip()
             videoId = self.config[videoConfig]['id']
             videoPath = self.config[videoConfig]['path']
-            self.videos[videoId] = Video(
-                videoPath=videoPath,
-                videoId=videoId)
+            self.videoManager.AddVideo(
+                Video(videoPath=videoPath, videoId=videoId)
+            )

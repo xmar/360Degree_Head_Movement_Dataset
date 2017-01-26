@@ -15,13 +15,15 @@ class UserManager(object):
     This class is used to parse the existing user file and to add a new user
     """
 
-    def __init__(self, pathToExistingUserFile):
+    def __init__(self, pathToExistingUserFile, rootResultFolder):
         """init function that parse the existing user file.
 
         :param pathToExistingUserFile: Path to the existing user file.
             This file contains one line for each user. It contains the user
             first name, last name and the user id separated with ';'.
         :type pathToExistingUserFile: str
+        :param rootResultFolder: The path to the root result folder
+        :type rootResultFolder: str
         """
         self.logger = logging.getLogger('TestManager.Helpers.UserManager')
         self.pathToExistingUserFile = pathToExistingUserFile
@@ -41,7 +43,11 @@ class UserManager(object):
                                                                firstName,
                                                                lastName)
                         )
-                    self.userDict[uid] = User(firstName, lastName, uid)
+                    self.userDict[uid] = User(firstName,
+                                              lastName,
+                                              uid,
+                                              rootResultFolder
+                                              )
 
     def GetExistingUserList(self):
         """Return a dict of uid,string: first and last name."""
