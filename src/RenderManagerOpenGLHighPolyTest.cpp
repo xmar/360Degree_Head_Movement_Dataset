@@ -42,6 +42,7 @@
 // Standard includes
 #include <iostream>
 #include <string>
+#include <sstream>
 #include <memory>
 #include <chrono>
 #include <stdlib.h> // For exit()
@@ -256,8 +257,11 @@ void DrawWorld(
     // }
     lastDisplayedFrame = frameInfo.m_frameDisplayId;
     lastNbDroppedFrame += frameInfo.m_nbDroppedFrame;
-    logWriter->AddLog(Log(frameInfo.m_timestamp, frameInfo.m_pts, rot, frameInfo.m_frameDisplayId));
-    publisherLogMQ->SendMessage(POSITION_INFO, "Send something");
+    Log log(frameInfo.m_timestamp, frameInfo.m_pts, rot, frameInfo.m_frameDisplayId);
+    std::stringstream ss;
+    ss << log.GetQuaternion();
+    publisherLogMQ->SendMessage(POSITION_INFO, ss.str());
+    logWriter->AddLog(std::move(log));
     if (frameInfo.m_last)
     {
       logWriter->Stop();
@@ -376,7 +380,7 @@ int main(int argc, char* argv[]) {
       started = true;
 
       std::cout << "Start player the video\n";
-      publisherLogMQ->SendMessage(APP_STATUS, "Started");
+      publisherLogMQ->SendMessage(APP_STATUS, "RUNNING");
 
       // Frame timing
       size_t countFrames = 0;
@@ -405,11 +409,10 @@ int main(int argc, char* argv[]) {
           {
             std::string message = "Rendering at "
                 + std::to_string(countFrames / std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count())
-                + " fps; Video displayed at "
+                + " fps | Video displayed at "
                 + std::to_string((lastDisplayedFrame-startDisplayedFrame - lastNbDroppedFrame)/std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count())
-                + " fps ( felt fps: "
-                + std::to_string((lastDisplayedFrame-startDisplayedFrame)/std::chrono::duration_cast<std::chrono::duration<double,std::ratio<1>>>(duration).count())
-                + " fps)"
+                + " fps | nb droppped frame: "
+                + std::to_string(lastNbDroppedFrame)
                 ;
             std::cout << "\033[2K\r" << message << std::flush;
             publisherLogMQ->SendMessage(FPS_INFO, message);
@@ -420,17 +423,21 @@ int main(int argc, char* argv[]) {
           }
       }
 
+      publisherLogMQ->SendMessage(APP_STATUS, "DONE");
+
     }
     catch(const po::error& e)
     {
        std::cerr << "ERROR: " << e.what() << std::endl << std::endl
           << desc << std::endl;
+       publisherLogMQ->SendMessage(APP_STATUS, "ERROR");
        return 1;
     }
     catch(std::exception& e)
     {
        std::cerr << "Uncatched exception: " << e.what() << std::endl
           << desc << std::endl;
+       publisherLogMQ->SendMessage(APP_STATUS, "ERROR");
        return 1;
 
     }
@@ -438,6 +445,7 @@ int main(int argc, char* argv[]) {
     {
        std::cerr << "Uncatched exception" << std::endl
          << desc << std::endl;
+       publisherLogMQ->SendMessage(APP_STATUS, "ERROR");
        return 1;
 
     }

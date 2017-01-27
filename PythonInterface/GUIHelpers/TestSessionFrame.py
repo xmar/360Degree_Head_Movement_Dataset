@@ -17,41 +17,48 @@ import queue
 class CommunicationQueues(object):
     """Class used for the working thread to communicat with tkinter."""
 
-    def __init__(self):
+    def __init__(self, nameLabel, statusLabel, feedbackFpsLabel,
+                 feedbackPositionLabel):
         """init function."""
         self.nameQueue = queue.Queue()
         self.statusQueue = queue.Queue()
-        self.feedbackQueue = queue.Queue()
+        self.feedbackFpsQueue = queue.Queue()
+        self.feedbackPositionQueue = queue.Queue()
+        self.nameLabel = nameLabel
+        self.statusLabel = statusLabel
+        self.feedbackFpsLabel = feedbackFpsLabel
+        self.feedbackPositionLabel = feedbackPositionLabel
         self.done = False
+        self.__allEmpty = True
 
-    @staticmethod
-    def __ProcessQueue(q, label):
+    def __ProcessQueue(self, q, label):
         try:
             string = q.get_nowait()
         except queue.Empty:
             pass
         else:
+            self.__allEmpty = False
             label.config(text=string)
+            q.task_done()
 
-    def LoopUpdateTkinterLabels(self,
-                                nameLabel,
-                                statusLabel,
-                                feedbackLabel,
-                                doneCallback
-                                ):
+    def LoopUpdateTkinterLabels(self, doneCallback):
         """Called from the tkinter thread to update the labels until done."""
-        self.__ProcessQueue(self.nameQueue, nameLabel)
-        self.__ProcessQueue(self.statusQueue, statusLabel)
-        self.__ProcessQueue(self.feedbackQueue, feedbackLabel)
+        self.__allEmpty = True
+        self.__ProcessQueue(self.nameQueue, self.nameLabel)
+        self.__ProcessQueue(self.statusQueue, self.statusLabel)
+        self.__ProcessQueue(self.feedbackFpsQueue, self.feedbackFpsLabel)
+        self.__ProcessQueue(self.feedbackPositionQueue,
+                            self.feedbackPositionLabel)
         if not self.done:
-            GetRootFrame().after(500,
-                                 CommunicationQueues.LoopUpdateTkinterLabels,
-                                 self,
-                                 nameLabel,
-                                 statusLabel,
-                                 feedbackLabel,
-                                 doneCallback
-                                 )
+            if self.__allEmpty:
+                GetRootFrame().after(
+                    500,
+                    CommunicationQueues.LoopUpdateTkinterLabels,
+                    self,
+                    doneCallback
+                    )
+            else:
+                self.LoopUpdateTkinterLabels(doneCallback)
         else:
             doneCallback()
 
@@ -92,21 +99,27 @@ class TestSessionFrame(Frame):
 
         self.testName = \
             Label(self,
-                  text='1'
+                  text=''
                   )
         self.testName.grid(row=3, column=0)
 
         self.testStatus = \
             Label(self,
-                  text='2'
+                  text=''
                   )
         self.testStatus.grid(row=3, column=1)
 
-        self.testFeedback = \
+        self.testFeedbackFps = \
             Label(self,
-                  text='3'
+                  text=''
                   )
-        self.testFeedback.grid(row=4, column=0)
+        self.testFeedbackFps.grid(row=4, column=0)
+
+        self.testFeedbackPosition = \
+            Label(self,
+                  text=''
+                  )
+        self.testFeedbackPosition.grid(row=5, column=0)
 
         self.__RunNextText()
 
@@ -118,20 +131,19 @@ class TestSessionFrame(Frame):
                 self.currentTest.user.lastName,
                 self.currentTest.video.id
             ))
-            commQueue = CommunicationQueues()
+            commQueue = CommunicationQueues(self.testName, self.testStatus,
+                                            self.testFeedbackFps,
+                                            self.testFeedbackPosition)
             self.workingThread = threading.Thread(
                 target=partial(self.currentTest.Run, commQueue)
                 )
             self.workingThread.start()
-            commQueue.LoopUpdateTkinterLabels(self.testName,
-                                              self.testStatus,
-                                              self.testFeedback,
-                                              partial(self.__RunNextText)
-                                              )
+            commQueue.LoopUpdateTkinterLabels(partial(self.__RunNextText))
         else:
             self.testName.grid_forget()
             self.testStatus.grid_forget()
-            self.testFeedback.grid_forget()
+            self.testFeedbackFps.grid_forget()
+            self.testFeedbackPosition.grid_forget()
 
             self.quitButton = Button(self,
                                      text='Test Done: Quit',

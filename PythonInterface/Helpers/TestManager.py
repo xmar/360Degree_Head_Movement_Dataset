@@ -13,6 +13,7 @@ import Helpers
 import time
 import os
 import subprocess as sub
+import zmq
 
 
 class Test(object):
@@ -49,6 +50,7 @@ class Test(object):
 
     def GenerateIniFile(self):
         """Generate the ini file for the C++ software."""
+        iniConfParser = Helpers.GetIniConfParser()
         fileStr = '[Config]\n'
         fileStr += 'textureConfig=Video1\n'
         fileStr += 'projectionConfig=Equirectangular\n'
@@ -69,7 +71,9 @@ class Test(object):
         fileStr += 'outputId={}\n'.format(self.video.id)
         fileStr += '\n'
         fileStr += '[PublisherLog]\n'
-        fileStr += 'port=5542\n'
+        fileStr += 'port={}\n'.format(
+            iniConfParser.portForInterprocessCommunication
+            )
         self.logger.debug('Generate ini file: {}'.format(self.configPath))
         with open(self.configPath, 'w') as o:
             o.write(fileStr)
@@ -77,17 +81,52 @@ class Test(object):
     def Run(self, commQueue):
         """Run the test. This is a blocking call."""
         commQueue.nameQueue.put('VideoID {}:'.format(self.video.id))
-        commQueue.statusQueue.put('is RUNNING')
-        commQueue.feedbackQueue.put('No feedback')
+        commQueue.statusQueue.put('is STARTING')
+        commQueue.feedbackFpsQueue.put('No received feedback\n' +
+                                       'No received feedback\n' +
+                                       'No received feedback')
+        commQueue.feedbackPositionQueue.put('No received feedback')
 
         iniConfParser = Helpers.GetIniConfParser()
+
+        context = zmq.Context()
+        socket = context.socket(zmq.SUB)
+        socket.setsockopt_string(zmq.SUBSCRIBE, '')
+        socket.connect('tcp://127.0.0.1:{}'.format(
+            iniConfParser.portForInterprocessCommunication)
+                       )
+
         pathToOsvrClientPlayer = iniConfParser.pathToOsvrClientPlayer
 
+        first = True
         with sub.Popen([pathToOsvrClientPlayer,
                         '-c',
                         self.configPath]) as proc:
             while proc.poll() is None:
-                time.sleep(1)
+                if first:
+                    first = False
+                    socket.connect('tcp://127.0.0.1:5542')
+                try:
+                    msg = socket.recv_string(1)
+                except zmq.error.Again:
+                    # print('sleep')
+                    time.sleep(0.5)
+                else:
+                    msgType, value = msg.split(': ', maxsplit=1)
+                    if msgType == 'APP_STATUS':
+                        commQueue.statusQueue.put(value)
+                    elif msgType == 'FPS_INFO':
+                        tmp = value.split(' | ')
+                        value = tmp[0]
+                        for t in tmp[1:]:
+                            value += '\n{}'.format(t)
+                        commQueue.feedbackFpsQueue.put(value)
+                    elif msgType == 'POSITION_INFO':
+                        commQueue.feedbackPositionQueue.put(value)
+                    else:
+                        self.logger.error(
+                            'Unknown message type from application: {}'.format(
+                                msg))
 
         commQueue.statusQueue.put('is DONE')
 

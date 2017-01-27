@@ -32,6 +32,7 @@ public:
     out.m_t -= t;
     return out;
   }
+  const auto& GetQuaternion(void) const {return m_q;}
 private:
   Timestamp m_t;
   Timestamp m_pts;

@@ -27,6 +27,7 @@ class UserManager(object):
         """
         self.logger = logging.getLogger('TestManager.Helpers.UserManager')
         self.pathToExistingUserFile = pathToExistingUserFile
+        self.rootResultFolder = rootResultFolder
 
         self.userDict = dict()
         self.maxUid = -1
@@ -64,7 +65,8 @@ class UserManager(object):
                                                           firstName,
                                                           lastName)
             )
-        self.userDict[self.maxUid] = User(firstName, lastName, self.maxUid)
+        self.userDict[self.maxUid] = User(firstName, lastName, self.maxUid,
+                                          self.rootResultFolder)
         self.StoreUserList()
         return self.maxUid
 

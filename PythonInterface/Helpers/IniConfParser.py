@@ -38,6 +38,8 @@ class IniConfParser(object):
         self.resultFolder = self.config['AppConfig']['resultFolder']
         self.pathToOsvrClientPlayer = \
             self.config['AppConfig']['pathToOsvrClientPlayer']
+        self.portForInterprocessCommunication = \
+            self.config['AppConfig']['portForInterprocessCommunication']
         if ch is not None:
             consolLogLevel = self.config['AppConfig']['consoleLogLevel']
             ch.setLevel(logging.DEBUG if 'DEBUG' == consolLogLevel
