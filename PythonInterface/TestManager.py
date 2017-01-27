@@ -64,6 +64,7 @@ if __name__ == '__main__':
 
     # Define the GUI window
     root = GUIHelpers.GetRootFrame()
+    root.geometry("400x400+100+100")
     root.resizable(True, True)
 
     # This frame contains the objects used for the questionnaries
@@ -76,6 +77,9 @@ if __name__ == '__main__':
     mainFrame = GUIHelpers.GetHomeFrame(
         root, userSelectionFrame=userSelectionFrame)
     mainFrame.grid(row=0, column=0)
+
+    root.grid_rowconfigure(0, weight=1)
+    root.grid_columnconfigure(0, weight=1)
 
     # Start the GUI main loop
     logger.info('Start main loop')

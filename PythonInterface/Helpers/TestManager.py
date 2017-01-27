@@ -106,6 +106,10 @@ class Test(object):
                 if first:
                     first = False
                     socket.connect('tcp://127.0.0.1:5542')
+                if commQueue.stop:
+                    proc.kill()
+                    time.sleep(0.5)
+                    continue
                 try:
                     msg = socket.recv_string(1)
                 except zmq.error.Again:
