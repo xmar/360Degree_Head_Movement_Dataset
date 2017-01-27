@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     # Define the GUI window
     root = GUIHelpers.GetRootFrame()
-    root.geometry("400x400+100+100")
+    root.geometry("500x400+100+100")
     root.resizable(True, True)
 
     # This frame contains the objects used for the questionnaries

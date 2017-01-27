@@ -6,6 +6,7 @@ IMT Atlantique
 
 import logging
 from tkinter import *
+from tkinter import messagebox
 from functools import partial
 
 from .TestConfigurationFrame import TestConfigurationFrame
@@ -64,18 +65,140 @@ class QuestionnaireFrame(Frame):
         Frame.__init__(self, *args, **kwargs)
         self.parent = args[0]
 
+        row = 0
+
+        # First and Last Name
         self.firstNameLabelEntry = tix.LabelEntry(self, label='First name: ')
         self.lastNameLabelEntry = tix.LabelEntry(self, label='Last name: ')
 
+        self.firstNameLabelEntry.grid(row=row, column=0)
+        self.lastNameLabelEntry.grid(row=row, column=1)
+        row += 1
+
+        # Gender
+        self.genderValue = StringVar(self)
+        self.genderLabel = Label(self,
+                                 text='Gender: ')
+        self.womanGender = Radiobutton(self,
+                                       text='woman',
+                                       variable=self.genderValue,
+                                       value='woman')
+        self.manGender = Radiobutton(self,
+                                     text='man',
+                                     variable=self.genderValue,
+                                     value='man')
+        self.genderLabel.grid(row=row, column=0)
+        self.womanGender.grid(row=row, column=1)
+        self.manGender.grid(row=row, column=2)
+        row += 1
+
+        # age
+        self.ageLabel = Label(self,
+                              text='Age: ')
+        self.ageValue = StringVar(self)
+        self.ageSpinbox = Spinbox(self, from_=1, to=120, width=5,
+                                  textvariable=self.ageValue, justify='right')
+        self.ageLabel.grid(row=row, column=0)
+        self.oldAge = '25'
+        self.ageValue.set(self.oldAge)
+        self.ageValue.trace('w',
+                            lambda nm, idx, mode, var=self.ageValue:
+                                QuestionnaireFrame.ValidateAge(self)
+                            )
+        self.ageSpinbox.grid(row=row, column=1)
+        row += 1
+
+        # impairment to vision
+        self.impairmentLabel = Label(self,
+                                     text='Impairment to vision: ')
+        self.impairmentValue = StringVar(self)
+        impairmentDefaults = ['none',
+                              'daltonism',
+                              'myopia',
+                              'hypermetropia',
+                              'astigmatic',
+                              'myopia&astigmatic',
+                              'hypermetropia&astigmatic',
+                              ]
+        self.impairmentSpinbox = Spinbox(self, values=impairmentDefaults,
+                                         textvariable=self.impairmentValue,
+                                         justify='right')
+        self.impairmentLabel.grid(row=row, column=0)
+        self.impairmentSpinbox.grid(row=row, column=1)
+        row += 1
+
+        # used HDM
+        self.usedHMDLabel = Label(self,
+                                  text='How many hours have \n'
+                                       'you already used a HDM?'
+                                  )
+        self.usedHMDValue = StringVar(self)
+        self.usedHMDEntry = Entry(self, textvariable=self.usedHMDValue,
+                                  justify='right', width=5)
+        self.oldUsedHMD = '0'
+        self.usedHMDValue.set(self.oldUsedHMD)
+        self.usedHMDValue.trace('w',
+                                lambda nm, idx, mode,
+                                var=self.usedHMDValue:
+                                QuestionnaireFrame.ValidateUsedHMD(self)
+                                )
+        self.usedHMDLabel.grid(row=row, column=0)
+        self.usedHMDEntry.grid(row=row, column=1)
+        row += 1
+
+        # application used
+        self.appsUsedLabel = Label(self,
+                                   text='Which kind of application \n'
+                                   'did you used?'
+                                   )
+        self.appsUsedLabel.grid(row=row, column=0)
+        row += 1
+
+        # device used
+        self.devicessUsedLabel = Label(self,
+                                       text='Which kind of devices \n'
+                                       'have you already used?'
+                                       )
+        self.devicessUsedLabel.grid(row=row, column=0)
+        row += 1
+
+        # submit button
         self.submitTheFormButton = Button(
             self,
             text='Submit the form',
-            command=partial(self.PressedButton)
+            command=partial(self.PressedSubmitButton)
             )
+        self.submitTheFormButton.grid(row=row, column=0)
+        row += 1
 
-        self.firstNameLabelEntry.grid(row=0, column=0)
-        self.lastNameLabelEntry.grid(row=0, column=1)
-        self.submitTheFormButton.grid(row=1, column=0)
+    def ValidateAge(self):
+        """Check if self.ageValue is a number."""
+        new_value = self.ageValue.get()
+        try:
+            new_value == '' or int(new_value)
+            if new_value == '' or (int(new_value) >= 1 and
+                                   int(new_value) <= 120):
+                self.oldAge = new_value.strip()
+        except:
+            self.ageValue.set(self.oldAge)
+        else:
+            if self.oldAge != new_value:
+                self.ageValue.set(self.oldAge)
+
+    def ValidateUsedHMD(self):
+        """Check if self.usedHMDValue is a number."""
+        new_value = self.usedHMDValue.get()
+        try:
+            new_value == '' or float(new_value)
+            if new_value == '':
+                new_value = '0'
+            if new_value == '' or float(new_value) >= 0:
+                self.oldUsedHMD = new_value.strip()
+        except:
+            self.usedHMDValue.set(self.oldUsedHMD)
+        else:
+            if self.oldUsedHMD != new_value:
+                self.usedHMDValue.set(self.oldUsedHMD)
 
     def Reset(self):
         """Reset the frame."""
@@ -83,14 +206,32 @@ class QuestionnaireFrame(Frame):
         self.firstNameLabelEntry.subwidget('entry').delete(0, 'end')
         self.lastNameLabelEntry.subwidget('entry').delete(0, 'end')
 
-    def PressedButton(self):
+    def PressedSubmitButton(self):
         """Callback when the self.submitTheFormButton is pressed."""
         module_logger.info('Submit the form button pressed')
         firstName = self.firstNameLabelEntry.subwidget('entry').get()
         lastName = self.lastNameLabelEntry.subwidget('entry').get()
         uid = None
-        if len(firstName) > 0 and len(lastName) > 0:
-            uid = self.parent.userManager.AddNewUser(firstName, lastName)
+        self.impairmentValue.set(self.impairmentValue.get().lower())
+        # check if all field are valid
+        if len(firstName) == 0 or len(lastName) == 0:
+            messagebox.showwarning('Not valid form', 'A first name and a last'
+                                   'name should be given')
+            return
+        if len(self.genderValue.get()) == 0:
+            messagebox.showwarning('Not valid form', 'A gender '
+                                   'should be given')
+            return
+        if len(self.ageValue.get()) == 0:
+            messagebox.showwarning('Not valid form', 'Age should not be empty')
+            return
+        if len(self.impairmentValue.get()) == 0:
+            self.impairmentValue.set('none')
+        if len(self.usedHMDValue.get()) == 0:
+            messagebox.showwarning('Not valid form', 'If never used a HMD, the'
+                                   'value should be 0')
+            return
+        uid = self.parent.userManager.AddNewUser(firstName, lastName)
         if uid is None:
             self.parent.parent.Reset()
         else:
