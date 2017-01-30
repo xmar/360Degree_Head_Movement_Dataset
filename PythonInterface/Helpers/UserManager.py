@@ -57,6 +57,10 @@ class UserManager(object):
             ans[uid] = '{} {}'.format(user.firstName, user.lastName)
         return ans
 
+    def GetUserByUid(self, uid):
+        """Return the user with this uid or None."""
+        return self.userDict[uid] if uid in self.userDict else None
+
     def AddNewUser(self, firstName, lastName):
         """Add a new user to the user dict and return the uid."""
         self.maxUid += 1

@@ -7,6 +7,7 @@ IMT Atlantique
 from Helpers import TestManager, User, Video
 from GUIHelpers import GetHomeFrame, GetRootFrame
 from tkinter import *
+from tkinter.ttk import *
 from functools import partial
 import logging
 import shutil
@@ -69,13 +70,15 @@ class CommunicationQueues(object):
 class TestSessionFrame(Frame):
     """Frame that manage a running test session."""
 
-    def __init__(self, *args, selectedUser, testId, videoList, **kwargs):
+    def __init__(self, *args, selectedUser, testId, trainingVideo, videoList,
+                 **kwargs):
         """init function."""
         Frame.__init__(self, *args, **kwargs)
         self.logger = logging.getLogger(
             'TestManager.GUIHelpers.TestSessionFrame'
             )
-        self.testManager = TestManager(selectedUser, testId, videoList)
+        self.testManager = TestManager(selectedUser, testId, trainingVideo,
+                                       videoList)
         self.currentTest = None
 
         self.frameTitle = \

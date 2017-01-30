@@ -6,6 +6,7 @@ IMT Atlantique
 
 import logging
 from tkinter import *
+from tkinter.ttk import *
 from functools import partial
 from .TestSessionFrame import TestSessionFrame
 
@@ -84,11 +85,13 @@ class TestConfigurationFrame(Frame):
                              else '',
                              )
                          )
-        testSessionFrame = TestSessionFrame(self.parent,
-                                            selectedUser=self.selectedUser,
-                                            testId=testNb,
-                                            videoList=selectedVideoList
-                                            )
+        testSessionFrame = \
+            TestSessionFrame(self.parent,
+                             selectedUser=self.selectedUser,
+                             testId=testNb,
+                             trainingVideo=self.videoManager.trainingContent,
+                             videoList=selectedVideoList
+                             )
         self.grid_forget()
         testSessionFrame.grid(row=0, column=0)
         self.destroy()

@@ -7,7 +7,8 @@ IMT Atlantique
 """
 
 from functools import partial
-from tkinter import tix
+from tkinter import *
+from tkinter.ttk import *
 from tkinter.constants import *
 import argparse
 import os

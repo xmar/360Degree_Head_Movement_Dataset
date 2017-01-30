@@ -6,6 +6,8 @@ IMT Atlantique
 
 import logging
 from tkinter import *
+from tkinter.ttk import *
+from tkinter import tix
 from tkinter.constants import *
 from functools import partial
 

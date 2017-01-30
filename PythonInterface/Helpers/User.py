@@ -23,6 +23,8 @@ class User(object):
         self.userResultFolder = os.path.join(rootResultFolder,
                                              'uid'+str(self.uid)
                                              )
+        if not os.path.exists(self.userResultFolder):
+            os.makedirs(self.userResultFolder)
 
     def GetUserResultFolder(self):
         """Return the path to the user result folder.
@@ -30,6 +32,13 @@ class User(object):
         :rtype: str
         """
         return self.userResultFolder
+
+    def GetPathToUserFormAnswers(self):
+        """Return the path to the user form answers file.
+
+        :rtype: str
+        """
+        return os.path.join(self.userResultFolder, 'formAnswers.txt')
 
     def GetNumberExistingTest(self):
         """Number of test that already exist for this user.

@@ -6,6 +6,7 @@ IMT Atlantique
 
 import logging
 from tkinter import *
+from tkinter.ttk import *
 from tkinter import messagebox
 from functools import partial
 
@@ -55,6 +56,42 @@ class ExistingUserFrame(Frame):
             self.parent.DisplayTestConfiguration(
                 self.userManager.userDict[uid]
                 )
+
+
+class CheckboxWithLabel(Frame):
+    """Class that manage a checkbox with a label."""
+
+    def __init__(self, *args, label, withEntry=False, **kwargs):
+        """init function."""
+        Frame.__init__(self, *args, **kwargs)
+        self.withEntry = withEntry
+        self.labelText = label
+        self.label = Label(self, text=self.labelText)
+        self.value = BooleanVar(self, False)
+        self.checkbox = Checkbutton(self, variable=self.value)
+        if withEntry:
+            self.entryValue = StringVar(self)
+            self.entry = Entry(self,
+                               textvariable=self.entryValue,
+                               justify='right')
+        self.checkbox.grid(row=0, column=0)
+        self.label.grid(row=0, column=1)
+        if withEntry:
+            self.entry.grid(row=0, column=2)
+
+    def GetValue(self):
+        """Return the value of the checkbox.
+
+        The value is the label if withEntry=False and the checkbox is set,
+        the value of self.entryValue if withEntry=True and the checkbox is set,
+        or None if the checkbox is not set.
+        """
+        if not self.value.get():
+            return None
+        elif self.withEntry:
+            return self.entryValue.get()
+        else:
+            return self.labelText
 
 
 class QuestionnaireFrame(Frame):
@@ -147,19 +184,70 @@ class QuestionnaireFrame(Frame):
         row += 1
 
         # application used
-        self.appsUsedLabel = Label(self,
+        self.applicationFrame = Frame(self)
+        self.appsUsedLabel = Label(self.applicationFrame,
                                    text='Which kind of application \n'
                                    'did you used?'
                                    )
-        self.appsUsedLabel.grid(row=row, column=0)
+        self.appsUsedGameCheckbox = CheckboxWithLabel(self.applicationFrame,
+                                                      label='Game')
+        self.appsUsedYouTubeCheckbox = CheckboxWithLabel(self.applicationFrame,
+                                                         label='YouTube360')
+        self.appsUsedFacebookCheckbox = \
+            CheckboxWithLabel(self.applicationFrame,
+                              label='Facebook')
+        self.appsUsedStaticCheckbox = CheckboxWithLabel(self.applicationFrame,
+                                                        label='Static '
+                                                        'Panorama')
+        self.appsUsedOtherCheckbox = CheckboxWithLabel(self.applicationFrame,
+                                                       label='Other',
+                                                       withEntry=True)
+        # self.applicationFrame.grid(row=row, column=0)
+        self.rowApps = row
+        rowApp = 0
+        self.appsUsedLabel.grid(row=rowApp, column=0)
+        self.appsUsedGameCheckbox.grid(row=rowApp, column=1)
+        rowApp += 1
+        self.appsUsedYouTubeCheckbox.grid(row=rowApp, column=1)
+        rowApp += 1
+        self.appsUsedFacebookCheckbox.grid(row=rowApp, column=1)
+        rowApp += 1
+        self.appsUsedStaticCheckbox.grid(row=rowApp, column=1)
+        rowApp += 1
+        self.appsUsedOtherCheckbox.grid(row=rowApp, column=1, columnspan=2)
+        rowApp += 1
         row += 1
 
         # device used
-        self.devicessUsedLabel = Label(self,
-                                       text='Which kind of devices \n'
-                                       'have you already used?'
-                                       )
-        self.devicessUsedLabel.grid(row=row, column=0)
+        self.devicesFrame = Frame(self)
+        self.devicesUsedLabel = Label(self.devicesFrame,
+                                      text='Which kind of devices \n'
+                                      'have you already used?'
+                                      )
+        self.devicesUsedHMDCheckbox = CheckboxWithLabel(self.devicesFrame,
+                                                        label='HMD')
+        self.devicesUsedDesktopCheckbox = CheckboxWithLabel(self.devicesFrame,
+                                                            label='Desktop '
+                                                            'Player')
+        self.devicesUsedSmartphoneCheckbox = \
+            CheckboxWithLabel(self.devicesFrame,
+                              label='Smartphone')
+        self.devicesUsedOtherCheckbox = CheckboxWithLabel(self.devicesFrame,
+                                                          label='Other',
+                                                          withEntry=True)
+        self.rowDevices = row
+        # self.devicesFrame.grid(row=self.rowDevices, column=0)
+        rowDevices = 0
+        self.devicesUsedLabel.grid(row=rowDevices, column=0)
+        self.devicesUsedHMDCheckbox.grid(row=rowDevices, column=1)
+        rowDevices += 1
+        self.devicesUsedDesktopCheckbox.grid(row=rowDevices, column=1)
+        rowDevices += 1
+        self.devicesUsedSmartphoneCheckbox.grid(row=rowDevices, column=1)
+        rowDevices += 1
+        self.devicesUsedOtherCheckbox.grid(row=rowDevices, column=1,
+                                           columnspan=2)
+        rowDevices += 1
         row += 1
 
         # submit button
@@ -192,8 +280,16 @@ class QuestionnaireFrame(Frame):
             new_value == '' or float(new_value)
             if new_value == '':
                 new_value = '0'
-            if new_value == '' or float(new_value) >= 0:
+            if float(new_value) >= 0:
                 self.oldUsedHMD = new_value.strip()
+                if float(new_value) > 0:
+                    self.devicesFrame.grid(row=self.rowDevices, column=0,
+                                           columnspan=3)
+                    self.applicationFrame.grid(row=self.rowApps, column=0,
+                                               columnspan=3)
+                else:
+                    self.devicesFrame.grid_remove()
+                    self.applicationFrame.grid_remove()
         except:
             self.usedHMDValue.set(self.oldUsedHMD)
         else:
@@ -235,6 +331,52 @@ class QuestionnaireFrame(Frame):
         if uid is None:
             self.parent.parent.Reset()
         else:
+            pathToFormAns = \
+                self.parent.userManager.GetUserByUid(uid)\
+                .GetPathToUserFormAnswers()
+            with open(pathToFormAns, 'w') as formAns:
+                formAns.write('#questionId;answer(s) -> 0 = uid; 1 = gender;'
+                              ' 2 = age; 3 = impairment;'
+                              ' 4 = nbHour of HDM usage;'
+                              ' 5 = apps used; 6 = devices used\n')
+                # userId
+                formAns.write('0;{}\n'.format(uid))
+                # gender
+                formAns.write('1;{}\n'.format(self.genderValue.get()))
+                # age
+                formAns.write('2;{}\n'.format(self.ageValue.get()))
+                # impairment
+                formAns.write('3;{}\n'.format(self.impairmentValue.get()))
+                # hours of HDM usage
+                formAns.write('4;{}\n'.format(self.usedHMDValue.get()))
+                appsStr = ''
+                devicesStr = ''
+                if float(self.usedHMDValue.get()) > 0:
+                    for checkbox in [
+                        self.appsUsedGameCheckbox,
+                        self.appsUsedYouTubeCheckbox,
+                        self.appsUsedFacebookCheckbox,
+                        self.appsUsedStaticCheckbox,
+                        self.appsUsedOtherCheckbox
+                    ]:
+                        result = checkbox.GetValue()
+                        if result is not None and len(result) > 0:
+                            if len(appsStr) > 0:
+                                appsStr += ','
+                            appsStr += result
+                    for checkbox in [
+                        self.devicesUsedHMDCheckbox,
+                        self.devicesUsedDesktopCheckbox,
+                        self.devicesUsedSmartphoneCheckbox,
+                        self.devicesUsedOtherCheckbox
+                    ]:
+                        result = checkbox.GetValue()
+                        if result is not None and len(result) > 0:
+                            if len(devicesStr) > 0:
+                                devicesStr += ','
+                            devicesStr += result
+                formAns.write('5;{}\n'.format(appsStr))
+                formAns.write('6;{}\n'.format(devicesStr))
             self.parent.parent.DisplayTestConfiguration(
                 self.parent.userManager.userDict[uid]
                 )
