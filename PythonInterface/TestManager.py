@@ -57,9 +57,10 @@ if __name__ == '__main__':
     iniConfParser = Helpers.GetIniConfParser(args.configFile, ch=ch, fh=fh)
 
     # parse existing user file
-    userManager = Helpers.UserManager(os.path.join(iniConfParser.resultFolder,
-                                                   '.private_existingUsers.txt'
-                                                   ),
+    userManager = Helpers.GetGlobalUserManager(os.path.join(
+        iniConfParser.resultFolder,
+        '.private_existingUsers.txt'
+        ),
                                       iniConfParser.resultFolder
                                       )
 

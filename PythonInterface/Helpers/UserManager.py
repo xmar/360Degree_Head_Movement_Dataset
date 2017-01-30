@@ -8,6 +8,16 @@ from .User import User
 import logging
 import os
 
+global_user_manager = None
+
+
+def GetGlobalUserManager(*args, **kwargs):
+    """Get the unique user manager or create it."""
+    global global_user_manager
+    if global_user_manager is None:
+        global_user_manager = UserManager(*args, **kwargs)
+    return global_user_manager
+
 
 class UserManager(object):
     """class that manager all the known users in the system.
