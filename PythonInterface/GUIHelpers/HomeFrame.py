@@ -5,6 +5,7 @@ IMT Atlantique
 """
 
 import logging
+from Helpers import GetGlobalUserManager
 from tkinter import *
 from tkinter.ttk import *
 from tkinter import tix
@@ -43,7 +44,6 @@ class HomeFrame(Frame):
 
         *args and **kwargs are forwared to the Frame constructor
         """
-        global global_home_frame
         Frame.__init__(self, *args, **kwargs)
         self.logger = logging.getLogger('TestManager.GUIHelpers.HomeFrame')
         self.userSelectionFrame = userSelectionFrame
@@ -53,7 +53,23 @@ class HomeFrame(Frame):
             command=partial(self._pressStartNewTestButton)
             )
         self.startTestButton.grid(row=0, column=0)
-        global_home_frame = self
+
+        self.nbUserlabel = Label(self, text='')
+        self.nbTestlabel = Label(self, text='')
+        self.nbUserlabel.grid(row=1, column=0)
+        self.nbTestlabel.grid(row=2, column=0)
+
+    def grid(self, *args, **kwargs):
+        """overide the Frame.grid to update the user / test stats info."""
+        userManager = GetGlobalUserManager()
+        nbUser = len(userManager.userDict)
+        totalNbTest = 0
+        for user in userManager.userDict.values():
+            totalNbTest += user.GetNumberExistingTest()
+        self.nbUserlabel.config(text='Total number of user: {}'.format(nbUser))
+        self.nbTestlabel.config(text='Total number of test: '
+                                '{}'.format(totalNbTest))
+        super(Frame, self).grid(*args, **kwargs)
 
     def _pressStartNewTestButton(self):
         """Call when the start a new test button is pressed.

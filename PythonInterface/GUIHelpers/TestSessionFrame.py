@@ -151,6 +151,7 @@ class TestSessionFrame(Frame):
             while self.commQueue is not None and not self.commQueue.done:
                 time.sleep(0.5)
             self.commQueue = None
+            self.testManager.videoList = []
 
     def __RunNextText(self, stopped):
             self.currentTest = self.testManager.NextTest() if not stopped \

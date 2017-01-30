@@ -22,13 +22,14 @@ public:
 
   const Timestamp& GetTimestamp(void) const {return m_t;};
   const Quaternion& GetQuat(void) const {return m_q;};
+  const size_t& GetFrameId(void) const {return m_frameId;};
   friend std::ostream& operator<< (std::ostream& stream, const Log& log)
   {
-    stream << log.m_t << " " << log.m_frameId << " " << log.m_pts << " " << log.m_q;
+    stream << log.m_t << " " << log.m_frameId << " " /*<< log.m_pts << " "*/ << log.m_q;
   }
   Log operator-(const Timestamp& t) const
   {
-    Log out = *this;
+    Log out(*this);
     out.m_t -= t;
     return out;
   }

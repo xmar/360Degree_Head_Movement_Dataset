@@ -27,7 +27,8 @@ public:
   LogWriter(std::string storageFolder, std::string logId): m_storageFolder(storageFolder),
         m_logId(logId), m_isRunning(false), m_testId(0), m_output(nullptr), m_lastTimestamp(0,0),
         m_startTimestamp(0,0), m_firstTimestamp(true),
-        m_logQueue(), m_writerLogQueue(), m_mutex(), m_writingThread()
+        m_logQueue(), m_writerLogQueue(), m_mutex(), m_writingThread(),
+        m_lastLog(Timestamp(0,0), Timestamp(0,0), Quaternion(0,0,0,0), 0)
         {}
   virtual ~LogWriter(void) {if (m_output != nullptr) {Stop();}};
 
@@ -43,6 +44,7 @@ private:
   Timestamp m_lastTimestamp;
   Timestamp m_startTimestamp;
   bool m_firstTimestamp;
+  Log m_lastLog;
 
   std::queue<Log> m_logQueue;
   std::queue<Log> m_writerLogQueue;

@@ -18,19 +18,24 @@ void LogWriter::AddLog(const Log& log)
 {
   if (m_isRunning)
   {
-    if (m_firstTimestamp)
+    if (m_lastTimestamp < log.GetTimestamp())
+    {
+      if (log.GetQuat() != m_lastLog.GetQuat() || log.GetFrameId() != m_lastLog.GetFrameId()
+          || (m_firstTimestamp && log.GetFrameId() != size_t(-1)))
+      {
+        m_lastLog = log;
+        m_logQueue.push(log-m_startTimestamp);
+        if (m_logQueue.size() > SWAP_LIMIT)
+        {
+          SwapBuffer();
+        }
+        m_lastTimestamp = log.GetTimestamp();
+      }
+    }
+    if (m_firstTimestamp && log.GetFrameId() != size_t(-1))
     {
       m_firstTimestamp = false;
       //m_startTimestamp = log.GetTimestamp();
-    }
-    if (m_lastTimestamp < log.GetTimestamp())
-    {
-      m_logQueue.push(log-m_startTimestamp);
-      if (m_logQueue.size() > SWAP_LIMIT)
-      {
-        SwapBuffer();
-      }
-      m_lastTimestamp = log.GetTimestamp();
     }
   }
 }

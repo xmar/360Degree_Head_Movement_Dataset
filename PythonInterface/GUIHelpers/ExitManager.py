@@ -69,10 +69,16 @@ class ExitManager(object):
         self.nextId += 1
         self.callbackIdStack.append(callbackId)
         self.callbackDict[callbackId] = callback
+        return callbackId
 
     def PopCallback(self, callbackId):
         """Remove one exit callback."""
-        self.logger.debug('Pop an exit callback')
+        self.logger.debug('Try to pop an exit callback')
         if callbackId in self.callbackIdStack:
+            self.logger.debug('Exit callback {} poped'.format(callbackId))
             self.callbackIdStack.remove(callbackId)
             del self.callbackDict[callbackId]
+        self.logger.debug('CallbackStack size = {}; '
+                          'Dict size = {}'.format(len(self.callbackIdStack),
+                                                  len(self.callbackDict))
+                          )
