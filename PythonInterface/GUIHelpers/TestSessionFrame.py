@@ -5,7 +5,7 @@ IMT Atlantique
 """
 
 from Helpers import TestManager, User, Video
-from GUIHelpers import GetHomeFrame, GetRootFrame
+from GUIHelpers import GetHomeFrame, GetRootFrame, GetExitManager
 from tkinter import *
 from tkinter.ttk import *
 from functools import partial
@@ -56,7 +56,7 @@ class CommunicationQueues(object):
         if not self.done and not self.stop:
             if self.__allEmpty:
                 GetRootFrame().after(
-                    500,
+                    50,
                     CommunicationQueues.LoopUpdateTkinterLabels,
                     self,
                     doneCallback
@@ -137,6 +137,10 @@ class TestSessionFrame(Frame):
                   )
         self.testFeedbackPosition.grid(row=5, column=0)
 
+        exitManager = GetExitManager()
+        self.exitCallbackId = \
+            exitManager.AddCallback(partial(self.ExitCallback))
+
         self.__RunNextText(False)
 
     def PressedStopButton(self):
@@ -196,12 +200,23 @@ class TestSessionFrame(Frame):
                     self.cancelButton.config(state=DISABLED)
                 self.cancelButton.grid(row=1, column=1)
 
+    def ExitCallback(self):
+        """Callback called when the app is quitting."""
+        self.logger.debug('Called ExitCallback from '
+                          'the TestSessionFrame')
+        self.PressedStopButton()
+        if len(self.testManager.videoList) > 0:
+            self.cancelTest = True
+        self.PressedQuitButton()
+
     def PressedQuitButton(self):
         """Callback for the self.quitButton."""
         self.grid_forget()
         GetHomeFrame().grid(row=0, column=0)
         if self.cancelTest:
             self.CancelTheTest()
+        exitManager = GetExitManager()
+        exitManager.PopCallback(self.exitCallbackId)
         self.destroy()
 
     def PressedCancelButton(self):

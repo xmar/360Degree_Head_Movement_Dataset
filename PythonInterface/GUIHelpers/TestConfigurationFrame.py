@@ -5,10 +5,13 @@ IMT Atlantique
 """
 
 import logging
+from GUIHelpers import GetExitManager
 from tkinter import *
 from tkinter.ttk import *
 from functools import partial
 from .TestSessionFrame import TestSessionFrame
+import shutil
+import os
 
 
 class TestConfigurationFrame(Frame):
@@ -35,15 +38,6 @@ class TestConfigurationFrame(Frame):
                   )
         self.selectedUserLabel.grid(row=0, column=0)
 
-        self.startTrainingButton = Button(
-            self,
-            text='Start training',
-            command=partial(self.PressedTrainingButton)
-            )
-        if videoManager.GetTrainingContent() is None:
-            self.startTrainingButton.config(state=DISABLED)
-        self.startTrainingButton.grid(row=1, column=0)
-
         self.videosList = list()
         for videoId in videoManager.GetVideoDict():
             self.videosList.append(videoId)
@@ -62,10 +56,23 @@ class TestConfigurationFrame(Frame):
             )
         self.startTestButton.grid(row=4, column=0)
 
-    def PressedTrainingButton(self):
-        """Callback for when the startTrainingButton is pressed."""
-        self.logger.warning('Training not implemented yet')
-        pass
+        exitManager = GetExitManager()
+        self.exitCallbackId = \
+            exitManager.AddCallback(partial(self.ExitCallback))
+
+    def ExitCallback(self):
+        """if called we exited before really starting any test."""
+        self.logger.debug('Called ExitCallback from '
+                          'the TestConfigurationFrame')
+        testNb = self.selectedUser.GetNumberExistingTest()-1
+        testFolder = self.selectedUser.GetTestResultFolder(testNb)
+        if os.path.exists(testFolder):
+            self.logger.debug('Remove test #{} folder for user {} {}'.format(
+                testNb,
+                self.selectedUser.firstName,
+                self.selectedUser.lastName
+            ))
+            shutil.rmtree(testFolder)
 
     def PressedTestButton(self):
         """Callback for when the startTestButton is pressed."""
@@ -94,4 +101,7 @@ class TestConfigurationFrame(Frame):
                              )
         self.grid_forget()
         testSessionFrame.grid(row=0, column=0)
+
+        exitManager = GetExitManager()
+        exitManager.PopCallback(self.exitCallbackId)
         self.destroy()

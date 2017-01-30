@@ -68,6 +68,9 @@ if __name__ == '__main__':
     root.geometry("500x400+100+100")
     root.resizable(True, True)
 
+    # Init the exit callback manager
+    exitCallbackManager = GUIHelpers.GetExitManager()
+
     # This frame contains the objects used for the questionnaries
     userSelectionFrame = \
         GUIHelpers.UserSelectionFrame(root,
