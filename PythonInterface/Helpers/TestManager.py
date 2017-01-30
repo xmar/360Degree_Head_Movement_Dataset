@@ -108,13 +108,13 @@ class Test(object):
                     socket.connect('tcp://127.0.0.1:5542')
                 if commQueue.stop:
                     proc.kill()
-                    time.sleep(0.5)
+                    time.sleep(0.1)
                     continue
                 try:
                     msg = socket.recv_string(1)
                 except zmq.error.Again:
                     # print('sleep')
-                    time.sleep(0.5)
+                    time.sleep(0.1)
                 else:
                     msgType, value = msg.split(': ', maxsplit=1)
                     if msgType == 'APP_STATUS':
@@ -134,7 +134,7 @@ class Test(object):
 
         commQueue.statusQueue.put('is DONE')
 
-        time.sleep(1)
+        time.sleep(0.1)
 
         commQueue.done = True
 
@@ -153,9 +153,9 @@ class TestManager(object):
         self.testId = testId
         self.trainingVideo = trainingVideo
         self.videoList = videoList.copy()
+        shuffle(self.videoList)  # randomize the video order
         if self.trainingVideo is not None:
             self.videoList.insert(0, self.trainingVideo)
-        shuffle(self.videoList)  # randomize the video order
         self.StoreTestInfo()
 
     def StoreTestInfo(self):
