@@ -62,12 +62,15 @@ class IniConfParser(object):
             videoId = self.config[trainingVideoConfig]['id']
             videoPath = self.config[trainingVideoConfig]['path']
             nbMaxFrames = self.config[trainingVideoConfig]['nbMaxFrames']
+            startOffsetInSecond = \
+                self.config[trainingVideoConfig]['startOffsetInSecond']
             bufferSize = self.config[trainingVideoConfig]['bufferSize']
             self.videoManager.SetTrainingContent(
                 Video(videoPath=videoPath,
                       videoId=videoId,
                       nbMaxFrames=nbMaxFrames,
-                      bufferSize=bufferSize
+                      bufferSize=bufferSize,
+                      startOffsetInSecond=startOffsetInSecond
                       )
             )
         for videoConfig in \
@@ -77,10 +80,13 @@ class IniConfParser(object):
             videoPath = self.config[videoConfig]['path']
             nbMaxFrames = self.config[videoConfig]['nbMaxFrames']
             bufferSize = self.config[videoConfig]['bufferSize']
+            startOffsetInSecond = \
+                self.config[videoConfig]['startOffsetInSecond']
             self.videoManager.AddVideo(
                 Video(videoPath=videoPath,
                       videoId=videoId,
                       nbMaxFrames=nbMaxFrames,
-                      bufferSize=bufferSize
+                      bufferSize=bufferSize,
+                      startOffsetInSecond=startOffsetInSecond
                       )
             )

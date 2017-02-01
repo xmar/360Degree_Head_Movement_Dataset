@@ -34,8 +34,8 @@ constexpr size_t SDL_AUDIO_BUFFER_SIZE = 1024;
 
 using namespace IMT::LibAv;
 
-VideoReader::VideoReader(std::string inputPath, size_t bufferSize): m_inputPath(inputPath), m_fmt_ctx(nullptr), m_videoStreamIds(),
-    m_outputFrames(bufferSize), m_outputAudioFrames(-1), m_streamIdToVecId(), m_nbFrames(0), m_doneVect(), m_gotOne(), m_startDisplayTime(std::chrono::system_clock::now()),
+VideoReader::VideoReader(std::string inputPath, size_t bufferSize, float startOffsetInSecond): m_inputPath(inputPath), m_fmt_ctx(nullptr), m_videoStreamIds(),
+    m_outputFrames(bufferSize), m_outputAudioFrames(-1), m_streamIdToVecId(), m_nbFrames(0), m_startOffsetInSecond(startOffsetInSecond), m_doneVect(), m_gotOne(), m_startDisplayTime(std::chrono::system_clock::now()),
     m_swsCtx(nullptr), m_audioSwrCtx(nullptr), m_frame_ptr2(nullptr), m_decodingThread(), m_lastDisplayedPictureNumber(-1),
     m_videoStreamId(-1), m_audioStreamId(-1), m_lastPlayedAudioFrame(nullptr)
 {
@@ -362,6 +362,11 @@ void VideoReader::RunDecoderThread(void)
     AVPacket pkt;
     int ret = -1;
     PRINT_DEBUG_VideoReader("Read next pkt")
+    ///DEBUG
+    std::cout << "[DEBUG] start offset: " << m_startOffsetInSecond << std::endl;
+    std::chrono::milliseconds m_timeOffset(long(m_startOffsetInSecond * 1000));
+    int64_t seekTimeBasedUnit = m_startOffsetInSecond * double(m_fmt_ctx->streams[m_videoStreamId]->time_base.den) / m_fmt_ctx->streams[m_videoStreamId]->time_base.num;
+    av_seek_frame(m_fmt_ctx, m_videoStreamId, seekTimeBasedUnit, 0);
     while ((ret = av_read_frame(m_fmt_ctx, &pkt)) >= 0)
     {
         unsigned streamId = pkt.stream_index;
@@ -386,13 +391,17 @@ void VideoReader::RunDecoderThread(void)
                     if (ret == 0)
                     {
                         frame->SetTimeBase(m_fmt_ctx->streams[streamId]->time_base);
+                        frame->SetTimeOffset(m_timeOffset);
                         PRINT_DEBUG_VideoReader("Got a frame for streamId " <<streamId)
                         m_gotOne[m_streamIdToVecId[streamId]] = true;
-                        //m_outputFrames[m_streamIdToVecId[streamId]].push(std::move(frame));
-                        if (!m_outputFrames.Add(std::move(frame)))
+                        if (frame->GetDisplayTimestamp().time_since_epoch().count() >= 0)
                         {
-                          std::cout << "Decoding thread stopped: frame limite exceed\n";
-                          return;
+                          //m_outputFrames[m_streamIdToVecId[streamId]].push(std::move(frame));
+                          if (!m_outputFrames.Add(std::move(frame)))
+                          {
+                            std::cout << "Decoding thread stopped: frame limite exceed\n";
+                            return;
+                          }
                         }
                     }
                     else
@@ -417,7 +426,11 @@ void VideoReader::RunDecoderThread(void)
           if (ret > 0)
           {
             audioFrame->SetTimeBase(m_fmt_ctx->streams[streamId]->time_base);
-            m_outputAudioFrames.Add(audioFrame);
+            audioFrame->SetTimeOffset(m_timeOffset);
+            if (audioFrame->GetDisplayTimestamp().time_since_epoch().count() >= 0)
+            {
+              m_outputAudioFrames.Add(audioFrame);
+            }
           }
         }
         av_packet_unref(&pkt);
@@ -443,10 +456,15 @@ void VideoReader::RunDecoderThread(void)
                   if (got_a_frame)
                   {
                       PRINT_DEBUG_VideoReader("Got a frame for streamVectId "<<m_videoStreamId)
-                      if(!m_outputFrames.Add(std::move(frame)))
+                      frame->SetTimeBase(m_fmt_ctx->streams[m_videoStreamId]->time_base);
+                      frame->SetTimeOffset(m_timeOffset);
+                      if (frame->GetDisplayTimestamp().time_since_epoch().count() >= 0)
                       {
-                        std::cout << "Decoding thread stopped: frame limite exceed\n";
-                        return;
+                        if(!m_outputFrames.Add(std::move(frame)))
+                        {
+                          std::cout << "Decoding thread stopped: frame limite exceed\n";
+                          return;
+                        }
                       }
                       //m_outputFrames[streamVectId].emplace();
                   }
@@ -477,7 +495,11 @@ void VideoReader::RunDecoderThread(void)
               if (got_a_frame)
               {
                 audioFrame->SetTimeBase(m_fmt_ctx->streams[m_audioStreamId]->time_base);
-                m_outputAudioFrames.Add(audioFrame);
+                audioFrame->SetTimeOffset(m_timeOffset);
+                if (audioFrame->GetDisplayTimestamp().time_since_epoch().count() >= 0)
+                {
+                  m_outputAudioFrames.Add(audioFrame);
+                }
               }
               else
               {

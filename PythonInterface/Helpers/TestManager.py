@@ -60,6 +60,8 @@ class Test(object):
         fileStr += '[Video1]\n'
         fileStr += 'type=video\n'
         fileStr += 'nbFrame={}\n'.format(self.video.nbMaxFrames)
+        fileStr += 'startOffsetInSecond={}\n'.format(
+            self.video.startOffsetInSecond)
         fileStr += 'bufferSize={}\n'.format(self.video.bufferSize)
         fileStr += 'pathToVideo={}\n'.format(self.video.path)
         fileStr += '\n'

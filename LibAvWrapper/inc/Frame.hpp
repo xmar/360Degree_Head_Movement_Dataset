@@ -19,7 +19,8 @@ namespace LibAv {
 class Frame
 {
 public:
-  Frame(void): m_framePtr(nullptr), m_time_base{0,0}, m_haveFrame(false)
+  Frame(void): m_framePtr(nullptr), m_time_base{0,0}, m_haveFrame(false),
+  m_timeOffset(0)
   {
     m_framePtr = av_frame_alloc();
   }
@@ -36,7 +37,8 @@ public:
 
   bool IsValid(void) const {return m_haveFrame;}
   void SetTimeBase(AVRational time_base) {m_time_base = std::move(time_base);}
-  auto GetDisplayTimestamp(void) const {if (IsValid()) {return std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>((double(m_time_base.num)*av_frame_get_best_effort_timestamp(m_framePtr))/m_time_base.den)));} else {return std::chrono::system_clock::time_point(std::chrono::milliseconds(-1));}}
+  void SetTimeOffset(const std::chrono::milliseconds& timeOffset) {m_timeOffset = timeOffset;}
+  auto GetDisplayTimestamp(void) const {if (IsValid()) {return std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>((double(m_time_base.num)*av_frame_get_best_effort_timestamp(m_framePtr))/m_time_base.den))) - m_timeOffset;} else {return std::chrono::system_clock::time_point(std::chrono::milliseconds(-1));}}
   uint8_t** GetDataPtr(void) {if (IsValid()) {return m_framePtr->data;} else {return nullptr;}}
   size_t GetDisplayPictureNumber(void) const {if (IsValid()) {return m_framePtr->display_picture_number;} else {return -1;}}
 protected:
@@ -47,6 +49,7 @@ private:
   Frame& operator=(Frame const&) = delete;
 
   AVRational m_time_base;
+  std::chrono::milliseconds m_timeOffset;
 };
 
 class VideoFrame final: public Frame

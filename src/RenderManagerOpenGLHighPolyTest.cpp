@@ -260,8 +260,12 @@ void DrawWorld(
     Log log(frameInfo.m_timestamp, frameInfo.m_pts, rot, frameInfo.m_frameDisplayId);
     std::stringstream ss;
     ss << log.GetQuaternion();
-    publisherLogMQ->SendMessage(POSITION_INFO, ss.str());
-    logWriter->AddLog(std::move(log));
+    if (frameInfo.m_frameDisplayId != size_t(-1))
+    {
+      publisherLogMQ->SendMessage(POSITION_INFO, ss.str());
+      logWriter->AddLog(std::move(log));
+    }
+
     if (frameInfo.m_last)
     {
       logWriter->Stop();

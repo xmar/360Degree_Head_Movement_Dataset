@@ -13,8 +13,8 @@ namespace IMT {
 class ShaderTextureVideo: public ShaderTexture
 {
 public:
-  ShaderTextureVideo(std::string pathToVideo, size_t nbFrame = -1, size_t bufferSize = 10): ShaderTexture(),
-      m_pathToVideo(pathToVideo), m_videoReader(pathToVideo, bufferSize)
+  ShaderTextureVideo(std::string pathToVideo, size_t nbFrame = -1, size_t bufferSize = 10, float startOffsetInSecond = 0): ShaderTexture(),
+      m_pathToVideo(pathToVideo), m_videoReader(pathToVideo, bufferSize, startOffsetInSecond)
       {m_videoReader.Init(nbFrame);}
   virtual ~ShaderTextureVideo(void) = default;
   virtual void InitAudio(void) override {m_videoReader.InitAudio();}

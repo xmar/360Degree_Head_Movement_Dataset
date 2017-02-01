@@ -29,7 +29,7 @@ class AudioFrame;
 class VideoReader
 {
     public:
-        VideoReader(std::string inputPath, size_t bufferSize = 10);
+        VideoReader(std::string inputPath, size_t bufferSize = 10, float startOffsetInSecond = 102);
         VideoReader(const VideoReader&) = delete;
         VideoReader& operator=(const VideoReader&) = delete;
 
@@ -58,6 +58,7 @@ class VideoReader
         IMT::Buffer<VideoFrame> m_outputFrames;
         IMT::Buffer<AudioFrame> m_outputAudioFrames;
         unsigned m_nbFrames;
+        float m_startOffsetInSecond;
         std::vector<bool> m_doneVect;
         std::vector<bool> m_gotOne;
         std::chrono::system_clock::time_point m_startDisplayTime; //this time will be used to sync the video and the audio. The master clock is the system_clock
