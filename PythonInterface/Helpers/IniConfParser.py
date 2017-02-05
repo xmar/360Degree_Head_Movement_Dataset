@@ -57,22 +57,25 @@ class IniConfParser(object):
                         )
 
         self.videoManager = VideoManager()
-        trainingVideoConfig = self.config['AppConfig']['trainingVideo'].strip()
-        if len(trainingVideoConfig) > 0:
-            videoId = self.config[trainingVideoConfig]['id']
-            videoPath = self.config[trainingVideoConfig]['path']
-            nbMaxFrames = self.config[trainingVideoConfig]['nbMaxFrames']
-            startOffsetInSecond = \
-                self.config[trainingVideoConfig]['startOffsetInSecond']
-            bufferSize = self.config[trainingVideoConfig]['bufferSize']
-            self.videoManager.SetTrainingContent(
-                Video(videoPath=videoPath,
-                      videoId=videoId,
-                      nbMaxFrames=nbMaxFrames,
-                      bufferSize=bufferSize,
-                      startOffsetInSecond=startOffsetInSecond
-                      )
-            )
+        trainingVideoConfigList = \
+            self.config['AppConfig']['trainingVideo'].split(',')
+        for trainingVideoConfig in trainingVideoConfigList:
+            if len(trainingVideoConfig) > 0:
+                trainingVideoConfig = trainingVideoConfig.strip()
+                videoId = self.config[trainingVideoConfig]['id']
+                videoPath = self.config[trainingVideoConfig]['path']
+                nbMaxFrames = self.config[trainingVideoConfig]['nbMaxFrames']
+                startOffsetInSecond = \
+                    self.config[trainingVideoConfig]['startOffsetInSecond']
+                bufferSize = self.config[trainingVideoConfig]['bufferSize']
+                self.videoManager.AddTrainingContent(
+                    Video(videoPath=videoPath,
+                          videoId=videoId,
+                          nbMaxFrames=nbMaxFrames,
+                          bufferSize=bufferSize,
+                          startOffsetInSecond=startOffsetInSecond
+                          )
+                )
         for videoConfig in \
                 self.config['AppConfig']['videoConfigList'].split(','):
             videoConfig = videoConfig.strip()

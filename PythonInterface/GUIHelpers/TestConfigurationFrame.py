@@ -92,13 +92,19 @@ class TestConfigurationFrame(Frame):
                              else '',
                              )
                          )
+        trainingVideoList = list()
+        for trainingVideoId in self.videoManager.trainingContent:
+            trainingVideoList.append(
+                self.videoManager.trainingContent[trainingVideoId]
+                )
         testSessionFrame = \
-            TestSessionFrame(self.parent,
-                             selectedUser=self.selectedUser,
-                             testId=testNb,
-                             trainingVideo=self.videoManager.trainingContent,
-                             videoList=selectedVideoList
-                             )
+            TestSessionFrame(
+                self.parent,
+                selectedUser=self.selectedUser,
+                testId=testNb,
+                trainingVideoList=trainingVideoList,
+                videoList=selectedVideoList
+                )
         self.grid_forget()
         testSessionFrame.grid(row=0, column=0)
 

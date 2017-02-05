@@ -70,14 +70,15 @@ class CommunicationQueues(object):
 class TestSessionFrame(Frame):
     """Frame that manage a running test session."""
 
-    def __init__(self, *args, selectedUser, testId, trainingVideo, videoList,
-                 **kwargs):
+    def __init__(self, *args, selectedUser, testId, trainingVideoList,
+                 videoList, **kwargs):
         """init function."""
         Frame.__init__(self, *args, **kwargs)
         self.logger = logging.getLogger(
             'TestManager.GUIHelpers.TestSessionFrame'
             )
-        self.testManager = TestManager(selectedUser, testId, trainingVideo,
+        self.logger.debug(trainingVideoList)
+        self.testManager = TestManager(selectedUser, testId, trainingVideoList,
                                        videoList)
         self.currentTest = None
 

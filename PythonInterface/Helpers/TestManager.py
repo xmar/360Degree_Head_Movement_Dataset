@@ -144,7 +144,7 @@ class Test(object):
 class TestManager(object):
     """This class manage the configuration and run of one test session."""
 
-    def __init__(self, user, testId, trainingVideo, videoList):
+    def __init__(self, user, testId, trainingVideoList, videoList):
         """init function.
 
         :type user: Helpers.User
@@ -153,11 +153,14 @@ class TestManager(object):
         """
         self.user = user
         self.testId = testId
-        self.trainingVideo = trainingVideo
         self.videoList = videoList.copy()
         shuffle(self.videoList)  # randomize the video order
-        if self.trainingVideo is not None:
-            self.videoList.insert(0, self.trainingVideo)
+        print('DEBUG2', trainingVideoList)
+        if len(trainingVideoList) > 0:
+            trainingVideoListCopy = trainingVideoList.copy()
+            shuffle(trainingVideoListCopy)
+            print(trainingVideoListCopy)
+            self.videoList.insert(0, trainingVideoListCopy[0])
         self.StoreTestInfo()
 
     def StoreTestInfo(self):

@@ -12,15 +12,19 @@ class VideoManager(object):
 
     def __init__(self):
         """Init function."""
-        self.trainingContent = None
+        self.trainingContent = dict()
         self.videoDict = dict()
 
-    def SetTrainingContent(self, trainingVideo):
+    def AddTrainingContent(self, trainingVideo):
         """Set the training video.
 
         :type trainingVideo: Helpers.Video
         """
-        self.trainingContent = trainingVideo
+        self.trainingContent[trainingVideo.id] = trainingVideo
+
+    def GetTrainingContent(self):
+        """Return a list of training video."""
+        return self.trainingContent.values()
 
     def AddVideo(self, video):
         """Add a new video.
