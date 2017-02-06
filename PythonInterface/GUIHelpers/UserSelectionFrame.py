@@ -102,6 +102,8 @@ class QuestionnaireFrame(Frame):
         Frame.__init__(self, *args, **kwargs)
         self.parent = args[0]
 
+    def grid(self, *args, **kwargs):
+        """Overide the grid methode to reset the frame each time we draw it."""
         row = 0
 
         # First and Last Name
@@ -153,9 +155,15 @@ class QuestionnaireFrame(Frame):
                               'daltonism',
                               'myopia',
                               'hypermetropia',
+                              'presbiopia',
+                              'myopia&presbiopia',
+                              'hypermetropia&presbiopia',
                               'astigmatic',
                               'myopia&astigmatic',
                               'hypermetropia&astigmatic',
+                              'astigmatic&presbiopia',
+                              'myopia&astigmatic&presbiopia',
+                              'hypermetropia&astigmatic&presbiopia',
                               ]
         self.impairmentSpinbox = Spinbox(self, values=impairmentDefaults,
                                          textvariable=self.impairmentValue,
@@ -258,6 +266,7 @@ class QuestionnaireFrame(Frame):
             )
         self.submitTheFormButton.grid(row=row, column=0)
         row += 1
+        super().grid(*args, **kwargs)
 
     def ValidateAge(self):
         """Check if self.ageValue is a number."""

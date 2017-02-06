@@ -1,0 +1,180 @@
+"""Some tools to manipulate quaternions."""
+
+import math
+
+
+class Vector(object):
+    """This class represent a vector from R3."""
+
+    def __init__(self, x=0, y=0, z=0):
+        """init function."""
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def __mul__(self, s_v):
+        """Scalar muliplication or ScalarProduct if s is a vector."""
+        if isinstance(s_v, Vector):
+            return Vector.ScalarProduct(s_v, self)
+        elif isinstance(s_v, Quaternion):
+            return Quaternion(v=self)*s_v
+        else:
+            s = s_v
+            return Vector(x=s*self.x, y=s*self.y, z=s*self.z)
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, s):
+        """divide by a scalar."""
+        return Vector(x=self.x/s, y=self.y/s, z=self.z/s)
+
+    def __xor__(self, v):
+        """Vectorial product (self is the left-hand vector)."""
+        return Vector.VectorProduct(self, v)
+
+    def __add__(self, v):
+        """Addition of two vectors."""
+        return Vector(x=self.x + v.x,
+                      y=self.y + v.y,
+                      z=self.z + v.z)
+
+    def __sub__(self, v):
+        """Substraction of two vectors."""
+        return Vector(x=self.x - v.x,
+                      y=self.y - v.y,
+                      z=self.z - v.z)
+
+    def __str__(self):
+        """To string function (x, y, z)."""
+        return '({}, {}, {})'.format(self.x, self.y, self.z)
+
+    def norm(self):
+        """Return the norm of the vector."""
+        return math.sqrt(Vector.ScalarProduct(self, self))
+
+    def __neg__(self):
+        """Return -v."""
+        return Vector(x=-self.x,
+                      y=-self.y,
+                      z=-self.z)
+
+    @staticmethod
+    def ScalarProduct(v1, v2):
+        """Scalar product of two vector."""
+        return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z
+
+    @staticmethod
+    def VectorProduct(v1, v2):
+        """Vector product of two vector."""
+        return Vector(x=v1.y*v2.z-v1.z*v2.y,
+                      y=v1.z*v2.x-v1.x*v2.z,
+                      z=v1.x*v2.y-v1.y*v2.x)
+
+
+class Quaternion(object):
+    """This class represent a quaternion."""
+
+    def __init__(self, w=0, v=Vector(x=0, y=0, z=0)):
+        """init function with default values [0, 0, 0, 0]."""
+        self.w = w
+        self.v = v
+        self._isNormalized = False
+
+    def Norm(self):
+        """Return the norm of the quaternion."""
+        if self.IsNormalized():
+            return 1
+        else:
+            return math.sqrt(self.w*self.w + self.v*self.v)
+
+    def Normalize(self):
+        """Normalize this vector."""
+        if not self.IsNormalized():
+            tmp = self / self.Norm()
+            self.w = tmp.w
+            self.v = tmp.v
+            self._isNormalized = True
+        return self
+
+    def __mul__(self, other):
+        """multiplication operator.
+
+        other is a Quaternion, an integer, a float or a long.
+        """
+        if not isinstance(other, Quaternion):
+            if isinstance(other, Vector):
+                other = Quaternion(v=other)
+            else:
+                other = Quaternion(w=other)
+        ans = Quaternion()
+        ans.w = (self.w * other.w) - (self.v * other.v)
+        ans.v = (self.w * other.v) + (other.w * self.v) + (self.v ^ other.v)
+        return ans
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, s):
+        """divide by a scalar."""
+        return Quaternion(w=self.w/s,
+                          v=self.v/s)
+
+    def __add__(self, other):
+        """Addition of two quaternions."""
+        if not isinstance(other, Quaternion):
+            other = Quaternion(w=other)
+        return Quaternion(w=self.w + other.w,
+                          v=self.v + other.v)
+
+    __radd__ = __add__
+
+    def __sub__(self, other):
+        """Substraction of two quaternions."""
+        if not isinstance(other, Quaternion):
+            other = Quaternion(w=other)
+        return Quaternion(w=self.w - other.w,
+                          v=self.v - other.v)
+
+    __rsub__ = __sub__
+
+    def __str__(self):
+        """Return a string 'w + x.i + y.j + k.z'."""
+        return '{} + {}.i + {}.j + {}.k'.format(self.w,
+                                                self.v.x,
+                                                self.v.y,
+                                                self.v.z)
+
+    def IsPur(self):
+        """Return true if the quaternion is pur (i.e. w == 0)."""
+        return self.w == 0
+
+    def IsNormalized(self):
+        """Return true if the quaternion is normalized."""
+        return self._isNormalized
+
+    def Conj(self):
+        """Return the conjugate of self."""
+        return Quaternion(w=self.w, v=-self.v)
+
+    def Inv(self):
+        """Return the inverse of this quaternion."""
+        if self.IsNormalized():
+            return self.Conj()
+        else:
+            return self.Conj()/self.Norm()**2
+
+    def Rotation(self, v):
+        """Return a vector v' result of the rotation the vector v by self."""
+        self.Normalize()
+        return (self*v*self.Conj()).v
+
+
+def AverageAngularVelocity(q1, q2, deltaT):
+    """Compute the average angular velocity.
+
+    Average angular velocity to move from q1 to q2 during deltaT.
+    q1 is the old value
+    q2 is the new value
+    """
+    deltaQ = q2 - q1
+    W = ((deltaQ*2)/deltaT)*q2.Inv()
+    return W
