@@ -7,15 +7,28 @@ IMT Atlantique
 import logging
 import hashlib
 from functools import partial
+import os
 
 
 def md5sum(filePath):
     """Compute the md5 sum of a file located at filePath."""
-    with open(filePath, mode='rb') as f:
-        d = hashlib.md5()
-        for buf in iter(partial(f.read, 128), b''):
-            d.update(buf)
-    return d.hexdigest()
+    dirPath, basename = os.path.split(filePath)
+    fileName, extension = os.path.splitext(basename)
+    md5StoreFile = os.path.join(dirPath, '.{}.md5'.format(fileName))
+    if os.path.isfile(md5StoreFile):
+        with open(md5StoreFile, 'r') as i:
+            for line in i:
+                # the first line contains the MD5sum + '\n'
+                return line[:-1]
+    else:
+        with open(filePath, mode='rb') as f:
+            d = hashlib.md5()
+            for buf in iter(partial(f.read, 128), b''):
+                d.update(buf)
+            output = d.hexdigest()
+            with open(md5StoreFile, 'w') as o:
+                o.write('{}\n'.format(output))
+        return output
 
 
 class Video(object):
