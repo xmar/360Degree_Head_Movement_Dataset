@@ -11,6 +11,7 @@ from tkinter.ttk import *
 from tkinter import tix
 from tkinter.constants import *
 from functools import partial
+from .DeleteTestFrame import DeleteTestFrame
 
 global_home_frame = None
 global_root_frame = None
@@ -45,19 +46,32 @@ class HomeFrame(Frame):
         *args and **kwargs are forwared to the Frame constructor
         """
         Frame.__init__(self, *args, **kwargs)
+        self.parent = args[0]
         self.logger = logging.getLogger('TestManager.GUIHelpers.HomeFrame')
         self.userSelectionFrame = userSelectionFrame
+        currRow = 0
         self.startTestButton = Button(
             self,
             text='Start a new test',
             command=partial(self._pressStartNewTestButton)
             )
-        self.startTestButton.grid(row=0, column=0)
+        self.startTestButton.grid(row=currRow, column=0)
+        currRow += 1
+
+        self.delButton = Button(
+            self,
+            text='Delete some tests',
+            command=partial(self._pressDelButton)
+            )
+        self.delButton.grid(row=currRow, column=0)
+        currRow += 1
 
         self.nbUserlabel = Label(self, text='')
         self.nbTestlabel = Label(self, text='')
-        self.nbUserlabel.grid(row=1, column=0)
-        self.nbTestlabel.grid(row=2, column=0)
+        self.nbUserlabel.grid(row=currRow, column=0)
+        currRow += 1
+        self.nbTestlabel.grid(row=currRow, column=0)
+        currRow += 1
 
     def grid(self, *args, **kwargs):
         """overide the Frame.grid to update the user / test stats info."""
@@ -65,7 +79,7 @@ class HomeFrame(Frame):
         nbUser = len(userManager.userDict)
         totalNbTest = 0
         for user in userManager.userDict.values():
-            totalNbTest += user.GetNumberExistingTest()
+            totalNbTest += len(user.GetExistingTestPathList())
         self.nbUserlabel.config(text='Total number of user: {}'.format(nbUser))
         self.nbTestlabel.config(text='Total number of test: '
                                 '{}'.format(totalNbTest))
@@ -79,3 +93,9 @@ class HomeFrame(Frame):
         self.logger.info('Start a new test button pressed')
         self.grid_remove()
         self.userSelectionFrame.grid(row=0, column=0)
+
+    def _pressDelButton(self):
+        """Display the delete test frame."""
+        self.logger.info('Delete tests button pressed')
+        self.grid_remove()
+        DeleteTestFrame(self.parent).grid(row=0, column=0)
