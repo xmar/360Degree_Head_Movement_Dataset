@@ -48,7 +48,7 @@ class Vector(object):
         """To string function (x, y, z)."""
         return '({}, {}, {})'.format(self.x, self.y, self.z)
 
-    def norm(self):
+    def Norm(self):
         """Return the norm of the vector."""
         return math.sqrt(Vector.ScalarProduct(self, self))
 
@@ -165,7 +165,29 @@ class Quaternion(object):
     def Rotation(self, v):
         """Return a vector v' result of the rotation the vector v by self."""
         self.Normalize()
-        return (self*v*self.Conj()).v
+        return (self*v*self.Conj())
+
+    @staticmethod
+    def QuaternionFromAngleAxis(theta, u):
+        """Generate a quaternion from an angle theta and a direction."""
+        w = math.cos(theta/2)
+        v = math.sin(theta/2)*u/u.Norm()
+        return Quaternion(w=w, v=v)
+
+    @staticmethod
+    def Exp(q):
+        """Exponential function for a quaternion."""
+        expW = math.exp(q.w)
+        w = math.cos(q.v.Norm())*expW
+        v = math.sin(q.v.Norm())*q.v/q.v.Norm()
+        return Quaternion(w=w, v=v)
+
+    @staticmethod
+    def Log(q):
+        """Logarithm of a quaternion."""
+        w = math.log(q.Norm())
+        v = math.acos(q.w/q.Norm())*q.v/q.v.Norm()
+        return Quaternion(w=w, v=v)
 
 
 def AverageAngularVelocity(q1, q2, deltaT):
@@ -175,6 +197,12 @@ def AverageAngularVelocity(q1, q2, deltaT):
     q1 is the old value
     q2 is the new value
     """
-    deltaQ = q2 - q1
-    W = ((deltaQ*2)/deltaT)*q2.Inv()
+    if not q1.IsPur():
+        q1 = q1.Rotation(Vector(1, 0, 0))
+    if not q2.IsPur():
+        q2 = q2.Rotation(Vector(1, 0, 0))
+    # deltaQ = q2 - q1
+    deltaQ = q2*q1.Inv()
+    # W = ((deltaQ*2)/deltaT)*q2.Inv()
+    W = (2 * Quaternion.Exp(Quaternion.Log(deltaQ)) / deltaT)*q1.Inv()
     return W
