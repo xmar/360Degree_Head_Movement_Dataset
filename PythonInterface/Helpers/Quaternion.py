@@ -1,4 +1,8 @@
-"""Some tools to manipulate quaternions."""
+"""Some tools to manipulate quaternions.
+
+Author: Xavier Corbillon
+IMT Atlantique
+"""
 
 import math
 
@@ -57,6 +61,16 @@ class Vector(object):
         return Vector(x=-self.x,
                       y=-self.y,
                       z=-self.z)
+
+    def ToPolar(self):
+        """Return theta and phi from the polar coordinate of the vector.
+
+        theta = azimuth
+        phi = inclination
+        """
+        theta = math.atan2(self.y, self.x)
+        phi = math.acos(self.z/self.Norm())
+        return (theta, phi)
 
     @staticmethod
     def ScalarProduct(v1, v2):
@@ -136,6 +150,10 @@ class Quaternion(object):
 
     __rsub__ = __sub__
 
+    def __neg__(self):
+        """Return -v."""
+        return Quaternion(w=-self.w, v=-self.v)
+
     def __str__(self):
         """Return a string 'w + x.i + y.j + k.z'."""
         return '{} + {}.i + {}.j + {}.k'.format(self.w,
@@ -188,6 +206,11 @@ class Quaternion(object):
         w = math.log(q.Norm())
         v = math.acos(q.w/q.Norm())*q.v/q.v.Norm()
         return Quaternion(w=w, v=v)
+
+    @staticmethod
+    def Distance(q1, q2):
+        """Distance between two quaternions."""
+        return (q2-q1).Norm()
 
 
 def AverageAngularVelocity(q1, q2, deltaT):
