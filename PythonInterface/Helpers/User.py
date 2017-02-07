@@ -71,6 +71,8 @@ class User(object):
         for testPath in testPathList:
             name = os.path.split(testPath)[1]
             nbTest = max(nbTest, int(name[4:]))
+        if len(testPathList) > 1:
+            nbTest += 1
         return nbTest
 
     def GetTestResultFolder(self, testNumber):

@@ -64,6 +64,10 @@ if __name__ == '__main__':
                                       iniConfParser.resultFolder
                                       )
 
+    # Test statistics
+    stats = Helpers.Statistics(userManager)
+    stats.RunComputation()
+
     # Define the GUI window
     root = GUIHelpers.GetRootFrame()
     root.geometry("500x400+100+100")
