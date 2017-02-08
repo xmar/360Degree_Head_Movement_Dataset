@@ -42,6 +42,13 @@ class Vector(object):
                       y=self.y + v.y,
                       z=self.z + v.z)
 
+    def __radd__(self, other):
+        """Reverse add."""
+        if other is 0:
+            return self
+        else:
+            self.__add__(other)  # add is commutatif
+
     def __sub__(self, v):
         """Substraction of two vectors."""
         return Vector(x=self.x - v.x,
@@ -94,6 +101,11 @@ class Quaternion(object):
         self.v = v
         self._isNormalized = False
 
+    def Dot(self, other):
+        """Dot product of two quaternions."""
+        return Quaternion(w=self.w * other.w,
+                          v=Vector.ScalarProduct(self.v, other.v))
+
     def Norm(self):
         """Return the norm of the quaternion."""
         if self.IsNormalized():
@@ -134,12 +146,19 @@ class Quaternion(object):
 
     def __add__(self, other):
         """Addition of two quaternions."""
+        if isinstance(other, Vector):
+            other = Quaternion(v=other)
         if not isinstance(other, Quaternion):
             other = Quaternion(w=other)
         return Quaternion(w=self.w + other.w,
                           v=self.v + other.v)
 
-    __radd__ = __add__
+    def __radd__(self, other):
+        """Reverse add."""
+        if other is 0:
+            return self
+        else:
+            self.__add__(other)  # add is commutatif
 
     def __sub__(self, other):
         """Substraction of two quaternions."""
@@ -185,6 +204,10 @@ class Quaternion(object):
         self.Normalize()
         return (self*v*self.Conj())
 
+    def __pow__(self, k):
+        """define the power of a quaternion with k a real."""
+        return Quaternion.Exp(k * Quaternion.Log(self))
+
     @staticmethod
     def QuaternionFromAngleAxis(theta, u):
         """Generate a quaternion from an angle theta and a direction."""
@@ -220,6 +243,8 @@ def AverageAngularVelocity(q1, q2, deltaT):
     q1 is the old value
     q2 is the new value
     """
+    if q1.Dot(q2) < 0:
+        q2 = -q2
     if not q1.IsPur():
         q1 = q1.Rotation(Vector(1, 0, 0))
     if not q2.IsPur():

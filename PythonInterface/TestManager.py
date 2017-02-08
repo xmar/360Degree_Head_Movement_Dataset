@@ -64,9 +64,8 @@ if __name__ == '__main__':
                                       iniConfParser.resultFolder
                                       )
 
-    # Test statistics
-    stats = Helpers.Statistics(userManager)
-    stats.RunComputation()
+    # Init the global statistics object
+    stats = Helpers.GetGlobalStatistics(userManager)
 
     # Define the GUI window
     root = GUIHelpers.GetRootFrame()
