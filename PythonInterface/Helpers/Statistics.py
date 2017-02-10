@@ -60,8 +60,19 @@ class AggregatedResults(object):
     def StorePositions(self, filePath, vmax):
         """Store the position matrix image in a file."""
         plt.matshow(self.aggPositionMatrix, vmin=0, vmax=vmax)
-        plt.savefig(filePath, bbox_inches='tight')
+        plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
+        plt.matshow(self.aggPositionMatrix)
+        plt.savefig('{}_2.pdf'.format(filePath), bbox_inches='tight')
+        plt.close()
+        with open('{}_pos.txt'.format(filePath), 'w') as o:
+            o.write('i j value\n')
+            height, width = self.aggPositionMatrix.shape
+            for i in range(0, width):
+                for j in range(0, height):
+                    o.write('{} {} {}\n'.format(
+                        i, j, self.aggPositionMatrix[j, i]
+                    ))
 
 
 class ProcessedResult(object):
@@ -118,8 +129,8 @@ class ProcessedResult(object):
         """Compute the angular velocity."""
         qList = list()
         tList = list()
-        for t in self.filteredQuaternions:
-            q = self.filteredQuaternions[t]
+        for t in self.quaternions:
+            q = self.quaternions[t]
             qList.append(q)
             tList.append(t)
             if len(qList) == 3:
@@ -168,7 +179,37 @@ class ProcessedResult(object):
     def __filterQuaternion(self):
         """Filter the quaternions."""
         step = self.step
-        self.filteredQuaternions = self.quaternions
+        # self.filteredQuaternions = self.quaternions
+        if len(self.quaternions.keys()) == 0:
+            self.filteredQuaternions = self.quaternions
+            return
+        maxTimestamp = max(self.quaternions.keys())
+        timestampList = sorted(self.quaternions.keys())
+        for t_mid in np.arange(0, maxTimestamp, step/2):
+            t1 = None
+            t2 = None
+            for t in timestampList:
+                if t <= t_mid and t >= t_mid-step/2:
+                    t1 = t
+                    timestampList.pop(0)
+                elif t > t_mid and t <= t_mid+step/2:
+                    t2 = t
+                    timestampList.pop(0)
+                    break
+                elif t > t_mid+step/2:
+                    break
+            q_mid = None
+            if t1 is None and t2 is not None:
+                q_mid = self.quaternions[t2]
+            elif t2 is None and t1 is not None:
+                q_mid = self.quaternions[t1]
+            elif t1 is not None and t2 is not None:
+                k = (t_mid - t1)/(t2 - t1)
+                q_mid = Q.Quaternion.SLERP(self.quaternions[t1],
+                                           self.quaternions[t2],
+                                           k)
+            if q_mid is not None:
+                self.filteredQuaternions[t_mid] = q_mid
 
     def StoreAngularVelocity(self, filePath):
         """Store the position matrix image in a file."""
@@ -182,8 +223,19 @@ class ProcessedResult(object):
     def StorePositions(self, filePath, vmax):
         """Store the position matrix image in a file."""
         plt.matshow(self.positionMatrix, vmin=0, vmax=vmax)
-        plt.savefig(filePath, bbox_inches='tight')
+        plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
+        plt.matshow(self.positionMatrix)
+        plt.savefig('{}_2.pdf'.format(filePath), bbox_inches='tight')
+        plt.close()
+        with open('{}_pos.txt'.format(filePath), 'w') as o:
+            o.write('i j value\n')
+            height, width = self.positionMatrix.shape
+            for i in range(0, width):
+                for j in range(0, height):
+                    o.write('{} {} {}\n'.format(
+                        i, j, self.positionMatrix[j, i]
+                    ))
 
 
 global_statistics = None
@@ -272,33 +324,36 @@ class Statistics(object):
                 processedResult = ProcessedResult(resultPath)
                 if len(processedResult.filteredQuaternions) > 10:
                     self.resultsById[resultId] = processedResult
-                    vmax = max(vmax,
-                               self.resultsById[resultId].positionMatrix.max())
                     self.resultsByUser[userId].append(
                         self.resultsById[resultId])
                     self.resultsByVideo[videoId].append(
                         self.resultsById[resultId])
                     self.resultsById[resultId].ComputeAngularVelocity()
                     self.resultsById[resultId].ComputePositions()
+                    vmax = max(vmax,
+                               self.resultsById[resultId].positionMatrix.max())
                 self.progressBar['value'] += 1
             else:
                 print('thread done')
                 return
+        print('vmax = ', vmax)
+        for resultId in self.resultsById:
+            self.resultsById[resultId].StorePositions(
+                'results/statistics/individual/{}'.format(resultId), vmax
+            )
+            self.resultsById[resultId].StoreAngularVelocity(
+                'results/statistics/individual/{}.txt'.format(resultId)
+            )
+            self.progressBar['value'] += 1
         aggrUserResults = dict()
         aggrVideoResults = dict()
+        vmax = 0
         for userId in self.resultsByUser:
             if len(self.resultsByUser[userId]) > 0:
                 aggrUserResults[userId] = sum(self.resultsByUser[userId])
                 aggrUserResults[userId].Normalize()
                 vmax = max(vmax,
                            aggrUserResults[userId].aggPositionMatrix.max())
-                self.progressBar['value'] += 1
-        for videoId in self.resultsByVideo:
-            if len(self.resultsByVideo[videoId]) > 0:
-                aggrVideoResults[videoId] = sum(self.resultsByVideo[videoId])
-                aggrVideoResults[videoId].Normalize()
-                vmax = max(vmax,
-                           aggrVideoResults[videoId].aggPositionMatrix.max())
                 self.progressBar['value'] += 1
         print('vmax = ', vmax)
         for userId in aggrUserResults:
@@ -309,20 +364,21 @@ class Statistics(object):
                 'results/statistics/users/uid{}.txt'.format(userId)
             )
             self.progressBar['value'] += 1
+        vmax = 0
+        for videoId in self.resultsByVideo:
+            if len(self.resultsByVideo[videoId]) > 0:
+                aggrVideoResults[videoId] = sum(self.resultsByVideo[videoId])
+                aggrVideoResults[videoId].Normalize()
+                vmax = max(vmax,
+                           aggrVideoResults[videoId].aggPositionMatrix.max())
+                self.progressBar['value'] += 1
+        print('vmax = ', vmax)
         for videoId in aggrVideoResults:
             aggrVideoResults[videoId].StorePositions(
-                'results/statistics/videos/{}.pdf'.format(videoId), vmax
+                'results/statistics/videos/{}'.format(videoId), vmax
             )
             aggrVideoResults[videoId].StoreAngularVelocity(
                 'results/statistics/videos/{}.txt'.format(videoId)
-            )
-            self.progressBar['value'] += 1
-        for resultId in self.resultsById:
-            self.resultsById[resultId].StorePositions(
-                'results/statistics/individual/{}.pdf'.format(resultId), vmax
-            )
-            self.resultsById[resultId].StoreAngularVelocity(
-                'results/statistics/individual/{}.txt'.format(resultId)
             )
             self.progressBar['value'] += 1
         # del self.workingThread

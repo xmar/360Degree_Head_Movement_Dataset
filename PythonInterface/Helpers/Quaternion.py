@@ -103,8 +103,7 @@ class Quaternion(object):
 
     def Dot(self, other):
         """Dot product of two quaternions."""
-        return Quaternion(w=self.w * other.w,
-                          v=Vector.ScalarProduct(self.v, other.v))
+        return self.w * other.w + Vector.ScalarProduct(self.v, other.v)
 
     def Norm(self):
         """Return the norm of the quaternion."""
@@ -220,20 +219,29 @@ class Quaternion(object):
         """Exponential function for a quaternion."""
         expW = math.exp(q.w)
         w = math.cos(q.v.Norm())*expW
-        v = math.sin(q.v.Norm())*q.v/q.v.Norm()
+        # if q.v.Norm() == 0 then q is a real number
+        v = math.sin(q.v.Norm())*q.v/q.v.Norm() if q.v.Norm() != 0 else q.v
         return Quaternion(w=w, v=v)
 
     @staticmethod
     def Log(q):
         """Logarithm of a quaternion."""
         w = math.log(q.Norm())
-        v = math.acos(q.w/q.Norm())*q.v/q.v.Norm()
+        # if q.v.Norm() == 0 then q is a real number
+        v = math.acos(q.w/q.Norm())*q.v/q.v.Norm() if q.v.Norm() != 0 else q.v
         return Quaternion(w=w, v=v)
 
     @staticmethod
     def Distance(q1, q2):
         """Distance between two quaternions."""
         return (q2-q1).Norm()
+
+    @staticmethod
+    def SLERP(q1, q2, k):
+        """Compute the slerp interpolation of q1, q2 with a weight k."""
+        if q1.Dot(q2) < 0:
+            q2 = -q2
+        return q1 * (q1.Inv() * q2)**k
 
 
 def AverageAngularVelocity(q1, q2, deltaT):
