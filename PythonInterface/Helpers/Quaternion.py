@@ -11,7 +11,7 @@ class Vector(object):
     """This class represent a vector from R3."""
 
     def __init__(self, x=0, y=0, z=0):
-        """init function."""
+        """Init function."""
         self.x = x
         self.y = y
         self.z = z
@@ -29,7 +29,7 @@ class Vector(object):
     __rmul__ = __mul__
 
     def __truediv__(self, s):
-        """divide by a scalar."""
+        """Divide by a scalar."""
         return Vector(x=self.x/s, y=self.y/s, z=self.z/s)
 
     def __xor__(self, v):
@@ -96,7 +96,7 @@ class Quaternion(object):
     """This class represent a quaternion."""
 
     def __init__(self, w=0, v=Vector(x=0, y=0, z=0)):
-        """init function with default values [0, 0, 0, 0]."""
+        """Init function with default values [0, 0, 0, 0]."""
         self.w = w
         self.v = v
         self._isNormalized = False
@@ -122,7 +122,7 @@ class Quaternion(object):
         return self
 
     def __mul__(self, other):
-        """multiplication operator.
+        """Multiplication operator.
 
         other is a Quaternion, an integer, a float or a long.
         """
@@ -139,7 +139,7 @@ class Quaternion(object):
     __rmul__ = __mul__
 
     def __truediv__(self, s):
-        """divide by a scalar."""
+        """Divide by a scalar."""
         return Quaternion(w=self.w/s,
                           v=self.v/s)
 
@@ -173,11 +173,11 @@ class Quaternion(object):
         return Quaternion(w=-self.w, v=-self.v)
 
     def __str__(self):
-        """Return a string 'w + x.i + y.j + k.z'."""
-        return '{} + {}.i + {}.j + {}.k'.format(self.w,
-                                                self.v.x,
-                                                self.v.y,
-                                                self.v.z)
+        """Return a string 'w + x * i + y * j + k * z'."""
+        return '{} + {} * i + {} * j + {} * k'.format(self.w,
+                                                      self.v.x,
+                                                      self.v.y,
+                                                      self.v.z)
 
     def IsPur(self):
         """Return true if the quaternion is pur (i.e. w == 0)."""
@@ -204,7 +204,7 @@ class Quaternion(object):
         return (self*v*self.Conj())
 
     def __pow__(self, k):
-        """define the power of a quaternion with k a real."""
+        """Define the power of a quaternion with k a real."""
         return Quaternion.Exp(k * Quaternion.Log(self))
 
     @staticmethod

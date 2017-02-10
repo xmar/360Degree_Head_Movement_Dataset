@@ -54,15 +54,15 @@ class AggregatedResults(object):
             o.write('cdf angVel angVelDeg\n')
             angVel = self.aggAngularVelocity[1]
             for r in range(0, 101):
-                values = np.percentile(angVel, r)
+                values = np.percentile(angVel, r) if len(angVel) > 0 else -1
                 o.write('{} {} {}\n'.format(r, values, values*180/math.pi))
 
     def StorePositions(self, filePath, vmax):
         """Store the position matrix image in a file."""
-        plt.matshow(self.aggPositionMatrix, vmin=0, vmax=vmax)
+        plt.matshow(self.aggPositionMatrix, vmin=0, vmax=vmax, cmap='hot')
         plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
-        plt.matshow(self.aggPositionMatrix)
+        plt.matshow(self.aggPositionMatrix, cmap='hot')
         plt.savefig('{}_2.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
         with open('{}_pos.txt'.format(filePath), 'w') as o:
@@ -115,6 +115,7 @@ class ProcessedResult(object):
                     frameId = int(values[1])
                     self.frameIds[timestamp] = frameId
                     self.quaternions[timestamp] = q
+        print(resultPath, max(self.quaternions.keys()) if len(self.quaternions.keys()) > 0 else -1)
         self.__filterQuaternion()
 
     def __radd__(self, other):
@@ -129,8 +130,8 @@ class ProcessedResult(object):
         """Compute the angular velocity."""
         qList = list()
         tList = list()
-        for t in self.quaternions:
-            q = self.quaternions[t]
+        for t in self.filteredQuaternions:
+            q = self.filteredQuaternions[t]
             qList.append(q)
             tList.append(t)
             if len(qList) == 3:
@@ -163,18 +164,20 @@ class ProcessedResult(object):
     def __filterVelocity(self):
         """Fill the angularVelocityWindow tuple."""
         step = self.step
-        windowedVelocity = dict()
-        maxTimestamp = max(self.angularVelocityDict.keys())
-        for t in self.angularVelocityDict:
-            index = int(t/step)
-            if index not in windowedVelocity:
-                windowedVelocity[index] = list()
-            windowedVelocity[index].append(self.angularVelocityDict[t])
-        self.angularVelocityWindow = (step, list())
-        angVel = self.angularVelocityWindow[1]
-        for index in windowedVelocity:
-            angVel.append(
-                sum(windowedVelocity[index])/len(windowedVelocity[index]))
+        self.angularVelocityWindow = (step,
+            list(self.angularVelocityDict.values()))
+        # windowedVelocity = dict()
+        # maxTimestamp = max(self.angularVelocityDict.keys())
+        # for t in self.angularVelocityDict:
+        #     index = int(t/step)
+        #     if index not in windowedVelocity:
+        #         windowedVelocity[index] = list()
+        #     windowedVelocity[index].append(self.angularVelocityDict[t])
+        # self.angularVelocityWindow = (step, list())
+        # angVel = self.angularVelocityWindow[1]
+        # for index in windowedVelocity:
+        #     angVel.append(
+        #         sum(windowedVelocity[index])/len(windowedVelocity[index]))
 
     def __filterQuaternion(self):
         """Filter the quaternions."""
@@ -184,32 +187,52 @@ class ProcessedResult(object):
             self.filteredQuaternions = self.quaternions
             return
         maxTimestamp = max(self.quaternions.keys())
-        timestampList = sorted(self.quaternions.keys())
+        # timestampList = sorted(self.quaternions.keys())
+        # for t_mid in np.arange(0, maxTimestamp, step/2):
+        #     t1 = None
+        #     t2 = None
+        #     for t in timestampList:
+        #         if t < t_mid-step:
+        #             timestampList.pop(0)
+        #         elif t <= t_mid and t >= t_mid-step:
+        #             t1 = t
+        #             timestampList.pop(0)
+        #         elif t > t_mid and t <= t_mid+step:
+        #             t2 = t
+        #             # timestampList.pop(0)
+        #             break
+        #         elif t > t_mid+step/2:
+        #             break
+        #     q_mid = None
+        #     if t1 is None and t2 is not None:
+        #         q_mid = self.quaternions[t2]
+        #     elif t2 is None and t1 is not None:
+        #         q_mid = self.quaternions[t1]
+        #     elif t1 is not None and t2 is not None:
+        #         k = (t_mid - t1)/(t2 - t1)
+        #         q_mid = Q.Quaternion.SLERP(self.quaternions[t1],
+        #                                    self.quaternions[t2],
+        #                                    k)
+        #     if q_mid is not None:
+        #         self.filteredQuaternions[t_mid] = q_mid
+        timestampList1 = sorted(self.quaternions.keys())
+        timestampList2 = timestampList1.copy()
+        t1 = timestampList1[0]
+        t2 = timestampList2[0]
         for t_mid in np.arange(0, maxTimestamp, step/2):
-            t1 = None
-            t2 = None
-            for t in timestampList:
-                if t <= t_mid and t >= t_mid-step/2:
-                    t1 = t
-                    timestampList.pop(0)
-                elif t > t_mid and t <= t_mid+step/2:
-                    t2 = t
-                    timestampList.pop(0)
-                    break
-                elif t > t_mid+step/2:
-                    break
-            q_mid = None
-            if t1 is None and t2 is not None:
-                q_mid = self.quaternions[t2]
-            elif t2 is None and t1 is not None:
-                q_mid = self.quaternions[t1]
-            elif t1 is not None and t2 is not None:
+            while len(timestampList1) > 0 and timestampList1[0] <= t_mid:
+                t1 = timestampList1.pop(0)
+            while len(timestampList2) > 0 and timestampList2[0] < t_mid:
+                timestampList2.pop(0)
+                t2 = timestampList2[0]
+            if t1 != t2:
                 k = (t_mid - t1)/(t2 - t1)
                 q_mid = Q.Quaternion.SLERP(self.quaternions[t1],
                                            self.quaternions[t2],
                                            k)
-            if q_mid is not None:
-                self.filteredQuaternions[t_mid] = q_mid
+            else:
+                q_mid = self.quaternions[t1]
+            self.filteredQuaternions[t_mid] = q_mid
 
     def StoreAngularVelocity(self, filePath):
         """Store the position matrix image in a file."""
@@ -217,15 +240,15 @@ class ProcessedResult(object):
         with open(filePath, 'w') as o:
             o.write('cdf angVel angVelDeg\n')
             for r in range(0, 101):
-                values = np.percentile(angVel, r)
+                values = np.percentile(angVel, r) if len(angVel) > 0 else -1
                 o.write('{} {} {}\n'.format(r, values, values*180/math.pi))
 
     def StorePositions(self, filePath, vmax):
         """Store the position matrix image in a file."""
-        plt.matshow(self.positionMatrix, vmin=0, vmax=vmax)
+        plt.matshow(self.positionMatrix, vmin=0, vmax=vmax, cmap='hot')
         plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
-        plt.matshow(self.positionMatrix)
+        plt.matshow(self.positionMatrix, cmap='hot')
         plt.savefig('{}_2.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
         with open('{}_pos.txt'.format(filePath), 'w') as o:
@@ -321,7 +344,9 @@ class Statistics(object):
         for resultId in self.resultsByIdInfo:
             if not self.done:
                 resultPath, userId, videoId = self.resultsByIdInfo[resultId]
-                processedResult = ProcessedResult(resultPath)
+                processedResult = ProcessedResult(resultPath,
+                                                  skiptime=10,
+                                                  step=0.02)
                 if len(processedResult.filteredQuaternions) > 10:
                     self.resultsById[resultId] = processedResult
                     self.resultsByUser[userId].append(
@@ -329,7 +354,8 @@ class Statistics(object):
                     self.resultsByVideo[videoId].append(
                         self.resultsById[resultId])
                     self.resultsById[resultId].ComputeAngularVelocity()
-                    self.resultsById[resultId].ComputePositions()
+                    self.resultsById[resultId].ComputePositions(width=100,
+                                                                height=100)
                     vmax = max(vmax,
                                self.resultsById[resultId].positionMatrix.max())
                 self.progressBar['value'] += 1
@@ -358,7 +384,7 @@ class Statistics(object):
         print('vmax = ', vmax)
         for userId in aggrUserResults:
             aggrUserResults[userId].StorePositions(
-                'results/statistics/users/uid{}.pdf'.format(userId), vmax
+                'results/statistics/users/uid{}'.format(userId), vmax
             )
             aggrUserResults[userId].StoreAngularVelocity(
                 'results/statistics/users/uid{}.txt'.format(userId)
