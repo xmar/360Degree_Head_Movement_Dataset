@@ -91,23 +91,25 @@ class AggregatedResults(object):
                         i, j, self.aggPositionMatrix[j, i]
                     ))
 
-    def WriteVideo(self, outputPath, segmentSize, width, height):
+    def WriteVideo(self, outputPath, fps, segmentSize, width, height):
         """Generate a video of the average position in time."""
         with FFmpeg.VideoWrite(outputPath,
                                width=width,
                                height=height,
-                               fps=1/segmentSize) as vo:
+                               fps=fps) as vo:
             posMatList = list()
             vmax = 0
             for timestamp in np.arange(self.minStartTime,
                                        self.maxEndTime,
-                                       segmentSize):
+                                       1/fps):
                 startTime = timestamp
                 endTime = timestamp + segmentSize
                 posMat = np.zeros(self.aggPositionMatrix.shape)
+                posMatList.append((startTime, endTime, posMat))
 
-                for result in self.processedResultList:
-                    for t in result.filteredQuaternions.keys():
+            for result in self.processedResultList:
+                for t in result.filteredQuaternions.keys():
+                    for (startTime, endTime, posMat) in posMatList:
                         t_real = t + result.startOffsetInSecond + \
                                  result.skiptime
                         if t_real >= startTime and t_real <= endTime:
@@ -118,17 +120,18 @@ class AggregatedResults(object):
                             i = int(w*(theta + math.pi)/(2*math.pi))
                             j = int(h*phi/math.pi)
                             posMat[j, i] += 1
+            for (startTime, endTime, posMat) in posMatList:
                 sumPos = posMat.sum()
                 if sumPos > 0:
                     posMat /= sumPos
                 vmax = max(vmax, posMat.max())
-                posMatList.append((startTime, endTime, posMat))
 
             for (startTime, endTime, posMat) in posMatList:
                 plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0)
                 buffer_ = io.BytesIO()
                 plt.axis('off')
-                plt.title('From {} s to {} s'.format(startTime, endTime))
+                plt.title('From {:6.2f} s to {:6.2f} s'.format(startTime,
+                                                               endTime))
                 plt.colorbar()
                 plt.savefig(buffer_, format = "png",
                             bbox_inches='tight',
@@ -491,7 +494,8 @@ class Statistics(object):
             )
             aggrVideoResults[videoId].WriteVideo(
                 'results/statistics/videos/{}.mkv'.format(videoId),
-                2,
+                fps=5,
+                segmentSize=2,
                 width=480,
                 height=480
             )
