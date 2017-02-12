@@ -5,12 +5,17 @@ IMT Atlantique
 """
 
 import Helpers.Quaternion as Q
+import Helpers.FFmpeg as FFmpeg
 import math
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import sys
 import threading
+import configparser
 from functools import partial
+import io
+import PIL
 
 
 class AggregatedResults(object):
@@ -23,9 +28,21 @@ class AggregatedResults(object):
         """
         self.aggPositionMatrix = None
         self.aggAngularVelocity = None
+        self.processedResultList = list()
+        self.minStartTime = sys.maxsize
+        self.maxEndTime = 0
 
     def __add__(self, processedResult):
         """Add results to the aggregator."""
+        self.processedResultList.append(processedResult)
+        self.minStartTime = min(self.minStartTime,
+                                min(processedResult.quaternions.keys()) +
+                                processedResult.startOffsetInSecond +
+                                processedResult.skiptime)
+        self.maxEndTime = max(self.minStartTime,
+                              max(processedResult.quaternions.keys()) +
+                              processedResult.startOffsetInSecond +
+                              processedResult.skiptime)
         if self.aggPositionMatrix is None:
             self.aggPositionMatrix = processedResult.positionMatrix.copy()
         else:
@@ -74,6 +91,55 @@ class AggregatedResults(object):
                         i, j, self.aggPositionMatrix[j, i]
                     ))
 
+    def WriteVideo(self, outputPath, segmentSize, width, height):
+        """Generate a video of the average position in time."""
+        with FFmpeg.VideoWrite(outputPath,
+                               width=width,
+                               height=height,
+                               fps=1/segmentSize) as vo:
+            posMatList = list()
+            vmax = 0
+            for timestamp in np.arange(self.minStartTime,
+                                       self.maxEndTime,
+                                       segmentSize):
+                startTime = timestamp
+                endTime = timestamp + segmentSize
+                posMat = np.zeros(self.aggPositionMatrix.shape)
+
+                for result in self.processedResultList:
+                    for t in result.filteredQuaternions.keys():
+                        t_real = t + result.startOffsetInSecond + \
+                                 result.skiptime
+                        if t_real >= startTime and t_real <= endTime:
+                            w, h = posMat.shape
+                            q = result.filteredQuaternions[t]
+                            v = q.Rotation(Q.Vector(1, 0, 0)).v
+                            theta, phi = v.ToPolar()
+                            i = int(w*(theta + math.pi)/(2*math.pi))
+                            j = int(h*phi/math.pi)
+                            posMat[j, i] += 1
+                sumPos = posMat.sum()
+                if sumPos > 0:
+                    posMat /= sumPos
+                vmax = max(vmax, posMat.max())
+                posMatList.append((startTime, endTime, posMat))
+
+            for (startTime, endTime, posMat) in posMatList:
+                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0)
+                buffer_ = io.BytesIO()
+                plt.axis('off')
+                plt.title('From {} s to {} s'.format(startTime, endTime))
+                plt.colorbar()
+                plt.savefig(buffer_, format = "png",
+                            bbox_inches='tight',
+                            pad_inches = 0)
+                buffer_.seek(0)
+                image = PIL.Image.open(buffer_)
+                image.load()
+                buffer_.close()
+                plt.close()
+                vo.AddPicture(image)
+                plt.close()
 
 class ProcessedResult(object):
     """Contains the quaternions and timestamp information of a result."""
@@ -85,6 +151,7 @@ class ProcessedResult(object):
         :param step: step in second for the filtering
         """
         self.step = step
+        self.skiptime = skiptime
         self.quaternions = dict()
         self.filteredQuaternions = dict()
         self.frameIds = dict()
@@ -94,6 +161,8 @@ class ProcessedResult(object):
         self.positionMatrix = np.zeros((1, 1))
         firstTimestamp = None
         isSkiping = True
+        pathToOsvrClientIni = '{}.ini'.format(os.path.dirname(resultPath))
+        self.__GetStartOffset(pathToOsvrClientIni)
         with open(resultPath, 'r') as i:
             for line in i:
                 values = line.split(' ')
@@ -115,7 +184,9 @@ class ProcessedResult(object):
                     frameId = int(values[1])
                     self.frameIds[timestamp] = frameId
                     self.quaternions[timestamp] = q
-        print(resultPath, max(self.quaternions.keys()) if len(self.quaternions.keys()) > 0 else -1)
+        # print(resultPath, max(self.quaternions.keys())
+        #                   if len(self.quaternions.keys()) > 0 else -1,
+        #                   self.startOffsetInSecond)
         self.__filterQuaternion()
 
     def __radd__(self, other):
@@ -125,6 +196,14 @@ class ProcessedResult(object):
         else:
             print('Error')
             exit(3)
+
+    def __GetStartOffset(self, pathToOsvrClientIni):
+        """Get the start offset in seconds from the config file of the test."""
+        configParser = configparser.ConfigParser()
+        configParser.read(pathToOsvrClientIni)
+        videoConfigSection = configParser['Config']['textureConfig']
+        self.startOffsetInSecond = \
+            float(configParser[videoConfigSection]['startOffsetInSecond'])
 
     def ComputeAngularVelocity(self):
         """Compute the angular velocity."""
@@ -149,7 +228,11 @@ class ProcessedResult(object):
         self.__filterVelocity()
 
     def ComputePositions(self, width=50, height=50):
-        """Compute the position matrix."""
+        """Compute the position matrix.
+
+        :param width: the width of the equirectangular picture generated
+        :param height: the height of the equirectangular picture generated
+        """
         self.positionMatrix = np.zeros((width, height))
         for t in self.filteredQuaternions:
             q = self.filteredQuaternions[t]
@@ -297,7 +380,7 @@ class Statistics(object):
             for testPath in testPathList:
                 for root, dirs, files in os.walk(testPath):
                     for videoId in dirs:
-                        if 'training' not in videoId:
+                        if 'training' not in videoId: # and 'Rollercoaster' in videoId:
                             if videoId not in self.resultsByVideo:
                                 self.resultsByVideo[videoId] = list()
                             resultId = '{}_{}'.format(userId, videoId)
@@ -405,6 +488,12 @@ class Statistics(object):
             )
             aggrVideoResults[videoId].StoreAngularVelocity(
                 'results/statistics/videos/{}.txt'.format(videoId)
+            )
+            aggrVideoResults[videoId].WriteVideo(
+                'results/statistics/videos/{}.mkv'.format(videoId),
+                2,
+                width=480,
+                height=480
             )
             self.progressBar['value'] += 1
         # del self.workingThread
