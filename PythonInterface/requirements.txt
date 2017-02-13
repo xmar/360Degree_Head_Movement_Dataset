@@ -1,10 +1,15 @@
 appdirs==1.4.0
 cycler==0.10.0
+dill==0.2.6
 matplotlib==2.0.0
+multiprocess==0.70.5
 numpy==1.12.0
 olefile==0.44
 packaging==16.8
+pathos==0.2.0
 Pillow==4.0.0
+pox==0.2.3
+ppft==1.6.4.7.1
 pyparsing==2.1.10
 python-dateutil==2.6.0
 pytz==2016.10

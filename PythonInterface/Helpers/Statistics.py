@@ -17,6 +17,7 @@ from functools import partial
 import io
 import PIL
 from pathos.multiprocessing import ProcessingPool
+import dill
 
 class AggregatedResults(object):
     """Contains aggregated results (i.e. results of results)."""
@@ -31,6 +32,7 @@ class AggregatedResults(object):
         self.processedResultList = list()
         self.minStartTime = sys.maxsize
         self.maxEndTime = 0
+        self.step = None
 
     def __add__(self, processedResult):
         """Add results to the aggregator."""
@@ -51,6 +53,11 @@ class AggregatedResults(object):
             self.aggAngularVelocity = \
                 (processedResult.angularVelocityWindow[0],
                  processedResult.angularVelocityWindow[1].copy())
+        if self.step is None:
+            self.step = processedResult.step
+        if self.step != processedResult.step:
+            print('ERR: cannot aggregate if do not have the same step')
+            exit(1)
         elif self.aggAngularVelocity[0] == \
                 processedResult.angularVelocityWindow[0]:
             self.aggAngularVelocity[1].extend(
@@ -349,6 +356,19 @@ class ProcessedResult(object):
 
 global_statistics = None
 
+def Load(pathToFile):
+    """Load the object of exist or return None."""
+    if not os.path.exists(pathToFile):
+        return None
+    else:
+        with open(pathToFile, 'rb') as f:
+            return dill.load(f)
+
+def Store(obj, pathToFile):
+    """Store the object."""
+    with open(pathToFile, 'wb') as f:
+        dill.dump(obj, f)
+
 
 def GetGlobalStatistics(*args, **kwargs):
     """Return the unique global statistics object."""
@@ -431,14 +451,20 @@ class Statistics(object):
         pool = ProcessingPool()
         def worker(resultInfos):
             resultId, resultPath, userId, videoId = resultInfos
-            processedResult = ProcessedResult(resultPath,
-                                              skiptime=10,
-                                              step=0.03)
-            if len(processedResult.filteredQuaternions) > 10:
-                processedResult.ComputeAngularVelocity()
-                processedResult.ComputePositions(width=100,
-                                                       height=100)
-            #
+            step = 0.03
+            dumpPath = '{}.dump'.format(resultPath)
+            tmpProcessedResult = Load(dumpPath)
+            if tmpProcessedResult is None or tmpProcessedResult.step != step:
+                processedResult = ProcessedResult(resultPath,
+                                                  skiptime=10,
+                                                  step=step)
+                if len(processedResult.filteredQuaternions) > 10:
+                    processedResult.ComputeAngularVelocity()
+                    processedResult.ComputePositions(width=100,
+                                                           height=100)
+                Store(processedResult, '{}.dump'.format(resultPath))
+            else:
+                processedResult = tmpProcessedResult
             return (resultId, userId, videoId, processedResult)
         async_result = [
             pool.apipe(
@@ -473,8 +499,17 @@ class Statistics(object):
         vmax = 0
         for userId in self.resultsByUser:
             if len(self.resultsByUser[userId]) > 0:
-                aggrUserResults[userId] = sum(self.resultsByUser[userId])
-                aggrUserResults[userId].Normalize()
+                dumpPath = \
+                    'results/statistics/users/uid{}.dump'.format(userId)
+                tmpAggrUserResults = Load(dumpPath)
+                if tmpAggrUserResults is None or \
+                    tmpAggrUserResults.step != \
+                    self.resultsByVideo[videoId][0].step:
+                    aggrUserResults[userId] = sum(self.resultsByUser[userId])
+                    aggrUserResults[userId].Normalize()
+                    Store(aggrUserResults[userId], dumpPath)
+                else:
+                    aggrUserResults[userId] = tmpAggrUserResults
                 vmax = max(vmax,
                            aggrUserResults[userId].aggPositionMatrix.max())
                 self.progressBar['value'] += 1
@@ -490,8 +525,17 @@ class Statistics(object):
         vmax = 0
         for videoId in self.resultsByVideo:
             if len(self.resultsByVideo[videoId]) > 0:
-                aggrVideoResults[videoId] = sum(self.resultsByVideo[videoId])
-                aggrVideoResults[videoId].Normalize()
+                dumpPath = 'results/statistics/videos/{}.dump'.format(videoId)
+                tmpAggrVideoResults = Load(dumpPath)
+                if tmpAggrVideoResults is None or \
+                    tmpAggrVideoResults.step != \
+                    self.resultsByVideo[videoId][0].step:
+                    aggrVideoResults[videoId] = \
+                        sum(self.resultsByVideo[videoId])
+                    aggrVideoResults[videoId].Normalize()
+                    Store(aggrVideoResults[videoId], dumpPath)
+                else:
+                    aggrVideoResults[videoId] = tmpAggrVideoResults
                 vmax = max(vmax,
                            aggrVideoResults[videoId].aggPositionMatrix.max())
                 self.progressBar['value'] += 1
@@ -504,19 +548,19 @@ class Statistics(object):
                 'results/statistics/videos/{}.txt'.format(videoId)
             )
             self.progressBar['value'] += 1
-        def worker(processedResult):
+        def worker(videoId, processedResult):
             processedResult.WriteVideo(
                 'results/statistics/videos/{}.mkv'.format(videoId),
                 fps=5,
-                segmentSize=1,
+                segmentSize=1/5,
                 width=480,
                 height=480
             )
             return None
         async_result = [
-            pool.pipe(
+            pool.apipe(
                 worker,
-                aggrVideoResults[videoId]
+                videoId, aggrVideoResults[videoId]
                 ) for videoId in aggrVideoResults
             ]
         for r in async_result:
