@@ -16,7 +16,7 @@ import configparser
 from functools import partial
 import io
 import PIL
-
+from pathos.multiprocessing import ProcessingPool
 
 class AggregatedResults(object):
     """Contains aggregated results (i.e. results of results)."""
@@ -399,7 +399,7 @@ class Statistics(object):
                         # resultsByVideo[videoId].append(resultsById[resultId])
         self.progressBar['value'] = 0
         self.progressBar['maximum'] = 2 * (len(self.resultsByIdInfo) +
-                                           len(self.resultsByVideo) +
+                                           3/2*len(self.resultsByVideo) +
                                            len(self.resultsByUser))
         self.workingThread = threading.Thread(
             target=partial(Statistics._ComputationWorkThread, self)
@@ -427,27 +427,39 @@ class Statistics(object):
         if not os.path.exists('results/statistics/videos'):
             os.makedirs('results/statistics/videos')
         vmax = 0
-        for resultId in self.resultsByIdInfo:
-            if not self.done:
-                resultPath, userId, videoId = self.resultsByIdInfo[resultId]
-                processedResult = ProcessedResult(resultPath,
-                                                  skiptime=10,
-                                                  step=0.02)
-                if len(processedResult.filteredQuaternions) > 10:
-                    self.resultsById[resultId] = processedResult
-                    self.resultsByUser[userId].append(
-                        self.resultsById[resultId])
-                    self.resultsByVideo[videoId].append(
-                        self.resultsById[resultId])
-                    self.resultsById[resultId].ComputeAngularVelocity()
-                    self.resultsById[resultId].ComputePositions(width=100,
-                                                                height=100)
-                    vmax = max(vmax,
-                               self.resultsById[resultId].positionMatrix.max())
-                self.progressBar['value'] += 1
-            else:
-                print('thread done')
-                return
+
+        pool = ProcessingPool()
+        def worker(resultInfos):
+            resultId, resultPath, userId, videoId = resultInfos
+            print (resultId)
+            processedResult = ProcessedResult(resultPath,
+                                              skiptime=10,
+                                              step=0.02)
+            if len(processedResult.filteredQuaternions) > 10:
+                processedResult.ComputeAngularVelocity()
+                processedResult.ComputePositions(width=100,
+                                                       height=100)
+            #
+            return (resultId, userId, videoId, processedResult)
+        async_result = [
+            pool.apipe(
+                worker,
+                ((resultId, ) + self.resultsByIdInfo[resultId])
+                ) for resultId in self.resultsByIdInfo
+            ]
+        for r in async_result:
+            (resultId, userId, videoId, processedResult) = r.get()
+            self.resultsById[resultId] = processedResult
+            self.resultsByUser[userId].append(
+                self.resultsById[resultId])
+            self.resultsByVideo[videoId].append(
+                self.resultsById[resultId])
+            vmax = \
+                max(vmax,
+                    self.resultsById[resultId].positionMatrix.max()
+                    )
+            self.progressBar['value'] += 1
+    
         print('vmax = ', vmax)
         for resultId in self.resultsById:
             self.resultsById[resultId].StorePositions(
@@ -492,14 +504,27 @@ class Statistics(object):
             aggrVideoResults[videoId].StoreAngularVelocity(
                 'results/statistics/videos/{}.txt'.format(videoId)
             )
-            aggrVideoResults[videoId].WriteVideo(
+            self.progressBar['value'] += 1
+        def worker(processedResult):
+            processedResult.WriteVideo(
                 'results/statistics/videos/{}.mkv'.format(videoId),
                 fps=5,
                 segmentSize=2,
                 width=480,
                 height=480
             )
+            return None
+        async_result = [
+            pool.apipe(
+                worker,
+                aggrVideoResults[videoId]
+                ) for videoId in aggrVideoResults
+            ]
+        for r in async_result:
+            r.get()
             self.progressBar['value'] += 1
+        pool.close()
+        pool.join()
         # del self.workingThread
         self.done = True
         self.progressBar = None
