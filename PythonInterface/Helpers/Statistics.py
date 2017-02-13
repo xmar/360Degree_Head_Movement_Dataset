@@ -431,10 +431,9 @@ class Statistics(object):
         pool = ProcessingPool()
         def worker(resultInfos):
             resultId, resultPath, userId, videoId = resultInfos
-            print (resultId)
             processedResult = ProcessedResult(resultPath,
                                               skiptime=10,
-                                              step=0.02)
+                                              step=0.03)
             if len(processedResult.filteredQuaternions) > 10:
                 processedResult.ComputeAngularVelocity()
                 processedResult.ComputePositions(width=100,
@@ -459,7 +458,7 @@ class Statistics(object):
                     self.resultsById[resultId].positionMatrix.max()
                     )
             self.progressBar['value'] += 1
-    
+
         print('vmax = ', vmax)
         for resultId in self.resultsById:
             self.resultsById[resultId].StorePositions(
@@ -509,13 +508,13 @@ class Statistics(object):
             processedResult.WriteVideo(
                 'results/statistics/videos/{}.mkv'.format(videoId),
                 fps=5,
-                segmentSize=2,
+                segmentSize=1,
                 width=480,
                 height=480
             )
             return None
         async_result = [
-            pool.apipe(
+            pool.pipe(
                 worker,
                 aggrVideoResults[videoId]
                 ) for videoId in aggrVideoResults
