@@ -65,7 +65,7 @@ void ConfigParser::Init(void)
   }
   else if (projectionType == "Equirectangular")
   {
-    m_outputMesh = std::make_shared<MeshCubeEquiUV>(5.0f);
+    m_outputMesh = std::make_shared<MeshCubeEquiUV>(5.0f, 6*2*30*30);
   }
   else
   {
