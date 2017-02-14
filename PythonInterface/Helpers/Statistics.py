@@ -82,8 +82,8 @@ class AggregatedResults(object):
             horizontalAngVel = list()
             for w in angVel:
                 angVelNorm.append(w.Norm())
-                verticalAngVel.append(abs(w.z))
-                horizontalAngVel.append(
+                horizontalAngVel.append(abs(w.z))
+                verticalAngVel.append(
                     (Q.Vector(w.x, w.y, 0)).Norm())
             angVelNorm = sorted(angVelNorm)
             verticalAngVel = sorted(verticalAngVel)
@@ -358,8 +358,8 @@ class ProcessedResult(object):
         horizontalAngVel = list()
         for w in angVel:
             angVelNorm.append(w.Norm())
-            verticalAngVel.append(abs(w.z))
-            horizontalAngVel.append(
+            horizontalAngVel.append(abs(w.z))
+            verticalAngVel.append(
                 (Q.Vector(w.x, w.y, 0)).Norm())
         angVelNorm = sorted(angVelNorm)
         verticalAngVel = sorted(verticalAngVel)
