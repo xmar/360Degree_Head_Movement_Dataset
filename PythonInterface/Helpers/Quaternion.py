@@ -201,7 +201,9 @@ class Quaternion(object):
     def Rotation(self, v):
         """Return a vector v' result of the rotation the vector v by self."""
         self.Normalize()
-        return (self*v*self.Conj())
+        v2 = self*v*self.Conj()
+        v2.w = 0
+        return v2
 
     def __pow__(self, k):
         """Define the power of a quaternion with k a real."""
@@ -218,9 +220,10 @@ class Quaternion(object):
     def Exp(q):
         """Exponential function for a quaternion."""
         expW = math.exp(q.w)
-        w = math.cos(q.v.Norm())*expW
+        normV = q.v.Norm()
+        w = math.cos(normV)*expW
         # if q.v.Norm() == 0 then q is a real number
-        v = math.sin(q.v.Norm())*q.v/q.v.Norm() if q.v.Norm() != 0 else q.v
+        v = math.sin(normV)*q.v/normV if normV != 0 else q.v
         return Quaternion(w=w, v=v)
 
     @staticmethod
@@ -257,8 +260,8 @@ def AverageAngularVelocity(q1, q2, deltaT):
         q1 = q1.Rotation(Vector(1, 0, 0))
     if not q2.IsPur():
         q2 = q2.Rotation(Vector(1, 0, 0))
-    # deltaQ = q2 - q1
-    deltaQ = q2*q1.Inv()
+    deltaQ = q2 - q1
+    # deltaQ = q2*q1.Inv()
     # W = ((deltaQ*2)/deltaT)*q2.Inv()
-    W = (2 * Quaternion.Exp(Quaternion.Log(deltaQ)) / deltaT)*q1.Inv()
+    W = (2 * deltaQ / deltaT)*q1.Inv()
     return W

@@ -77,9 +77,26 @@ class AggregatedResults(object):
         with open(filePath, 'w') as o:
             o.write('cdf angVel angVelDeg\n')
             angVel = self.aggAngularVelocity[1]
-            for r in range(0, 101):
-                values = np.percentile(angVel, r) if len(angVel) > 0 else -1
-                o.write('{} {} {}\n'.format(r, values, values*180/math.pi))
+            angVelNorm = list()
+            verticalAngVel = list()
+            horizontalAngVel = list()
+            for w in angVel:
+                angVelNorm.append(w.Norm())
+                verticalAngVel.append(abs(w.z))
+                horizontalAngVel.append(
+                    (Q.Vector(w.x, w.y, 0)).Norm())
+            angVelNorm = sorted(angVelNorm)
+            verticalAngVel = sorted(verticalAngVel)
+            horizontalAngVel = sorted(horizontalAngVel)
+            with open(filePath, 'w') as o:
+                o.write('cdf angVel angVelDeg verticalAngVel verticalAngVelDeg horizontalAngVel horizontalAngVelDeg\n')
+                for r in range(0, 101):
+                    values = np.percentile(angVelNorm, r) if len(angVelNorm) > 0 else -1
+                    o.write('{} {} {} '.format(r, values, values*180/math.pi))
+                    values = np.percentile(verticalAngVel, r) if len(verticalAngVel) > 0 else -1
+                    o.write('{} {} '.format(values, values*180/math.pi))
+                    values = np.percentile(horizontalAngVel, r) if len(horizontalAngVel) > 0 else -1
+                    o.write('{} {}\n'.format(values, values*180/math.pi))
 
     def StorePositions(self, filePath, vmax):
         """Store the position matrix image in a file."""
@@ -173,6 +190,9 @@ class ProcessedResult(object):
         isSkiping = True
         pathToOsvrClientIni = '{}.ini'.format(os.path.dirname(resultPath))
         self.__GetStartOffset(pathToOsvrClientIni)
+        # alignRot is a rotation to align to the zero from Equi projection
+        alignRot = Q.Quaternion.QuaternionFromAngleAxis(-math.pi/2,
+                                                        Q.Vector(0, 0 ,1))
         with open(resultPath, 'r') as i:
             for line in i:
                 values = line.split(' ')
@@ -191,6 +211,7 @@ class ProcessedResult(object):
                                                 z=float(values[5])
                                                 )
                                      )
+                    q = alignRot * q
                     frameId = int(values[1])
                     self.frameIds[timestamp] = frameId
                     self.quaternions[timestamp] = q
@@ -223,15 +244,17 @@ class ProcessedResult(object):
             q = self.filteredQuaternions[t]
             qList.append(q)
             tList.append(t)
-            if len(qList) == 3:
+            if len(qList) == 2:
                 q1 = qList[0]
                 q2 = qList[1]
-                q3 = qList[2]
+                # q3 = qList[2]
 
-                velocity = (Q.Quaternion.Distance(q1, q2) +
-                            Q.Quaternion.Distance(q2, q3))/2
-                velocity /= (tList[2]-tList[0])
-                self.angularVelocityDict[tList[1]] = velocity
+                # velocity = (Q.Quaternion.Distance(q1, q2) +
+                #             Q.Quaternion.Distance(q2, q3))/2
+                # velocity /= (tList[2]-tList[0])
+                velocity = Q.AverageAngularVelocity(q1, q2, tList[1]-tList[0]).v
+                self.angularVelocityDict[tList[0] + (tList[1]-tList[0])/2] = \
+                    velocity
 
                 qList = qList[1:]
                 tList = tList[1:]
@@ -330,11 +353,26 @@ class ProcessedResult(object):
     def StoreAngularVelocity(self, filePath):
         """Store the position matrix image in a file."""
         angVel = self.angularVelocityWindow[1]
+        angVelNorm = list()
+        verticalAngVel = list()
+        horizontalAngVel = list()
+        for w in angVel:
+            angVelNorm.append(w.Norm())
+            verticalAngVel.append(abs(w.z))
+            horizontalAngVel.append(
+                (Q.Vector(w.x, w.y, 0)).Norm())
+        angVelNorm = sorted(angVelNorm)
+        verticalAngVel = sorted(verticalAngVel)
+        horizontalAngVel = sorted(horizontalAngVel)
         with open(filePath, 'w') as o:
-            o.write('cdf angVel angVelDeg\n')
+            o.write('cdf angVel angVelDeg verticalAngVel verticalAngVelDeg horizontalAngVel horizontalAngVelDeg\n')
             for r in range(0, 101):
-                values = np.percentile(angVel, r) if len(angVel) > 0 else -1
-                o.write('{} {} {}\n'.format(r, values, values*180/math.pi))
+                values = np.percentile(angVelNorm, r) if len(angVelNorm) > 0 else -1
+                o.write('{} {} {} '.format(r, values, values*180/math.pi))
+                values = np.percentile(verticalAngVel, r) if len(verticalAngVel) > 0 else -1
+                o.write('{} {} '.format(values, values*180/math.pi))
+                values = np.percentile(horizontalAngVel, r) if len(horizontalAngVel) > 0 else -1
+                o.write('{} {}\n'.format(values, values*180/math.pi))
 
     def StorePositions(self, filePath, vmax):
         """Store the position matrix image in a file."""
@@ -504,7 +542,9 @@ class Statistics(object):
                 tmpAggrUserResults = Load(dumpPath)
                 if tmpAggrUserResults is None or \
                     tmpAggrUserResults.step != \
-                    self.resultsByVideo[videoId][0].step:
+                    self.resultsByVideo[videoId][0].step or \
+                    len(tmpAggrUserResults.processedResultList) != \
+                    len(self.resultsByUser[userId]):
                     aggrUserResults[userId] = sum(self.resultsByUser[userId])
                     aggrUserResults[userId].Normalize()
                     Store(aggrUserResults[userId], dumpPath)
@@ -529,7 +569,9 @@ class Statistics(object):
                 tmpAggrVideoResults = Load(dumpPath)
                 if tmpAggrVideoResults is None or \
                     tmpAggrVideoResults.step != \
-                    self.resultsByVideo[videoId][0].step:
+                    self.resultsByVideo[videoId][0].step or \
+                    len(tmpAggrVideoResults.processedResultList) != \
+                    len(self.resultsByVideo[videoId]):
                     aggrVideoResults[videoId] = \
                         sum(self.resultsByVideo[videoId])
                     aggrVideoResults[videoId].Normalize()
