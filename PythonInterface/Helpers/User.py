@@ -22,7 +22,7 @@ class User(object):
     """Class that contains all usefull information on a user."""
 
     def __init__(self, userFirstName, userLastName, userId, rootResultFolder):
-        """init function.
+        """Init function.
 
         :type userFirstName: str
         :type userLastName: str
@@ -34,6 +34,8 @@ class User(object):
         self.userResultFolder = os.path.join(rootResultFolder,
                                              'uid'+str(self.uid)
                                              )
+        self.age = None
+        self.sex = None
         if not os.path.exists(self.userResultFolder):
             os.makedirs(self.userResultFolder)
 
@@ -50,6 +52,19 @@ class User(object):
         :rtype: str
         """
         return os.path.join(self.userResultFolder, 'formAnswers.txt')
+
+    def ParseFormAnswers(self):
+        """Get infos from the form answers."""
+        if self.sex is None or self.age is None:
+            pathToForm = self.GetPathToUserFormAnswers()
+            with open(pathToForm, 'r') as f:
+                for line in f:
+                    if len(line) > 0 and line[0] != '#':
+                        questionId, value = (line.rstrip()).split(';')
+                        if questionId == '1':
+                            self.sex = value
+                        elif questionId == '2':
+                            self.age = int(value)
 
     def GetExistingTestPathList(self):
         """Return a list of path to existing test."""
