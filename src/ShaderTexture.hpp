@@ -125,6 +125,7 @@ class ShaderTexture {
         //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
         //glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
         glUniform1i(m_myTextureUniformId,0);
+
         return std::move(frameInfo);
     }
 

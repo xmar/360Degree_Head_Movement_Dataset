@@ -5,7 +5,7 @@ IMT Atlantique
 """
 
 import logging
-from Helpers import GetGlobalUserManager, GetGlobalStatistics
+from Helpers import GetGlobalUserManager
 from tkinter import *
 from tkinter.ttk import *
 from tkinter import tix
@@ -69,13 +69,13 @@ class HomeFrame(Frame):
         self.delButton.grid(row=currRow, column=0)
         currRow += 1
 
-        self.statsButton = Button(
-            self,
-            text='Computes statistics',
-            command=partial(HomeFrame._pressStatsButton, self, currRow)
-            )
-        self.statsButton.grid(row=currRow, column=0)
-        currRow += 1
+        # self.statsButton = Button(
+        #     self,
+        #     text='Computes statistics',
+        #     command=partial(HomeFrame._pressStatsButton, self, currRow)
+        #     )
+        # self.statsButton.grid(row=currRow, column=0)
+        # currRow += 1
 
         self.nbUserlabel = Label(self, text='')
         self.nbTestlabel = Label(self, text='')
@@ -111,36 +111,36 @@ class HomeFrame(Frame):
         self.grid_remove()
         DeleteTestFrame(self.parent).grid(row=0, column=0)
 
-    def _pressStatsButton(self, row):
-        """Start the computation of the statistics."""
-        self.logger.info('Compute statistis button pressed')
-        stats = GetGlobalStatistics()
-        self.statsButton.config(state=DISABLED)
-        self.delButton.config(state=DISABLED)
-        self.startTestButton.config(state=DISABLED)
-        self.progressBar = Progressbar(self,
-                                       orient="horizontal",
-                                       length=200,
-                                       mode="determinate")
-        self.progressBar.grid(row=row, column=1)
-        exitManager = GetExitManager()
-        self.exitCallbackId = exitManager.AddCallback(
-            partial(self._statsComputationDone))
-        stats.RunComputation(self.progressBar,
-                             partial(self._statsComputationDone)
-                             )
-
-    def _statsComputationDone(self):
-        """Called when the computation of the stats is done."""
-        self.logger.info('Statistis computation done')
-        exitManager = GetExitManager()
-        exitManager.PopCallback(self.exitCallbackId)
-        stats = GetGlobalStatistics()
-        self.logger.debug('Join computation thread')
-        stats.Join()
-        self.logger.debug('Join computation thread done')
-        self.statsButton.config(state=NORMAL)
-        self.delButton.config(state=NORMAL)
-        self.startTestButton.config(state=NORMAL)
-        self.progressBar.grid_forget()
-        del self.progressBar
+    # def _pressStatsButton(self, row):
+    #     """Start the computation of the statistics."""
+    #     self.logger.info('Compute statistis button pressed')
+    #     stats = GetGlobalStatistics()
+    #     self.statsButton.config(state=DISABLED)
+    #     self.delButton.config(state=DISABLED)
+    #     self.startTestButton.config(state=DISABLED)
+    #     self.progressBar = Progressbar(self,
+    #                                    orient="horizontal",
+    #                                    length=200,
+    #                                    mode="determinate")
+    #     self.progressBar.grid(row=row, column=1)
+    #     exitManager = GetExitManager()
+    #     self.exitCallbackId = exitManager.AddCallback(
+    #         partial(self._statsComputationDone))
+    #     stats.RunComputation(self.progressBar,
+    #                          partial(self._statsComputationDone)
+    #                          )
+    #
+    # def _statsComputationDone(self):
+    #     """Called when the computation of the stats is done."""
+    #     self.logger.info('Statistis computation done')
+    #     exitManager = GetExitManager()
+    #     exitManager.PopCallback(self.exitCallbackId)
+    #     stats = GetGlobalStatistics()
+    #     self.logger.debug('Join computation thread')
+    #     stats.Join()
+    #     self.logger.debug('Join computation thread done')
+    #     self.statsButton.config(state=NORMAL)
+    #     self.delButton.config(state=NORMAL)
+    #     self.startTestButton.config(state=NORMAL)
+    #     self.progressBar.grid_forget()
+    #     del self.progressBar

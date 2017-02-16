@@ -271,6 +271,7 @@ void DrawWorld(
       logWriter->Stop();
       quit = true;
     }
+    //library.OpenGL->toolkit->swapBuffers(library.OpenGL->toolkit->data, 0);
   }
 }
 
