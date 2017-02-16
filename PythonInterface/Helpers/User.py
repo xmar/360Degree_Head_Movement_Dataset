@@ -70,24 +70,24 @@ class User(object):
         """Return a list of path to existing test."""
         outputList = list()
         for root, dirs, files in os.walk(self.userResultFolder):
-            for name in dirs:
-                if 'test' in name and name[0:4] == 'test':
-                    outputList.append(os.path.join(root, name))
+            if root == self.userResultFolder:
+                for name in dirs:
+                    if 'test' in name and name[0:4] == 'test':
+                        outputList.append(os.path.join(root, name))
         outputList.sort(key=natural_keys)
         return outputList
 
-    def GetNumberExistingTest(self):
+    def GetNextTestId(self):
         """Number of test that already exist for this user.
 
         :rtype: int
         """
-        nbTest = 0
+        nbTest = -1
         testPathList = self.GetExistingTestPathList()
         for testPath in testPathList:
-            name = os.path.split(testPath)[1]
+            name = os.path.basename(testPath)
             nbTest = max(nbTest, int(name[4:]))
-        if len(testPathList) > 1:
-            nbTest += 1
+        nbTest += 1
         return nbTest
 
     def GetTestResultFolder(self, testNumber):

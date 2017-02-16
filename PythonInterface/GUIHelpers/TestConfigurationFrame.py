@@ -64,7 +64,7 @@ class TestConfigurationFrame(Frame):
         """if called we exited before really starting any test."""
         self.logger.debug('Called ExitCallback from '
                           'the TestConfigurationFrame')
-        testNb = self.selectedUser.GetNumberExistingTest()-1
+        testNb = self.selectedUser.GetNextTestId()-1
         testFolder = self.selectedUser.GetTestResultFolder(testNb)
         if os.path.exists(testFolder):
             self.logger.debug('Remove test #{} folder for user {} {}'.format(
@@ -78,7 +78,7 @@ class TestConfigurationFrame(Frame):
         """Callback for when the startTestButton is pressed."""
         selectedVideoList = list()
         videoNameList = ''
-        testNb = self.selectedUser.GetNumberExistingTest()
+        testNb = self.selectedUser.GetNextTestId()
         for index in self.videoListBox.curselection():
             selectedVideoList.append(
                 self.videoManager.GetVideoDict()[self.videosList[index]]

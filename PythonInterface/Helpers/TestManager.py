@@ -155,7 +155,6 @@ class TestManager(object):
         self.testId = testId
         self.videoList = videoList.copy()
         shuffle(self.videoList)  # randomize the video order
-        print('DEBUG2', trainingVideoList)
         if len(trainingVideoList) > 0:
             trainingVideoListCopy = trainingVideoList.copy()
             shuffle(trainingVideoListCopy)
