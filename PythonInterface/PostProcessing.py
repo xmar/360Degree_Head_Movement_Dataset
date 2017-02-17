@@ -41,7 +41,7 @@ if __name__ == '__main__':
                         help='path to the configuration file [config.ini]',
                         default='config.ini'
                         )
-    parser.add_argument('withVideo', action='store_true',
+    parser.add_argument('--withVideo', action='store_true',
                         help='if set compute heatmap videos',
                         )
 
