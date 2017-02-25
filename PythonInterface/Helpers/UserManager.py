@@ -7,6 +7,7 @@ IMT Atlantique
 from .User import User
 import logging
 import os
+import math
 
 global_user_manager = None
 
@@ -93,3 +94,66 @@ class UserManager(object):
                                             user.lastName,
                                             user.uid)
                         )
+
+    def StoreUserStats(self, pathId):
+        '''Compute stats on the users.
+
+        :param pathId: the path to store the results without extension
+        '''
+        pathGlobalStats = '{}_globalStats.txt'.format(pathId)
+        pathAgeStats = '{}_AgeStats.txt'.format(pathId)
+
+        filteredUser = dict()  # remove users without tests
+        for userId in self.userDict:
+            user =  self.userDict[userId]
+            if user.GetNextTestId() > 0:
+                filteredUser[userId] = user
+
+        womanByAge = dict()
+        manByAge = dict()
+        ageList = list()
+        ageStep = 10
+        firstTimeByAge = dict()
+        for user in filteredUser.values():
+            ageList.append(user.age)
+            age = math.floor(user.age/ageStep)
+            if age not in firstTimeByAge:
+                firstTimeByAge[age] = 0
+            firstTimeByAge[age] += 1 if user.nbHourHMD == 0 else 0
+            if user.sex == 'woman':
+                if age not in womanByAge:
+                    womanByAge[age] = 0
+                womanByAge[age] += 1
+            else:
+                if age not in manByAge:
+                    manByAge[age] = 0
+                manByAge[age] += 1
+
+        with open(pathGlobalStats, 'w') as o:
+            o.write('nbUser minAge medAge maxAge ratioWoman ratioFirstTime\n')
+            o.write('{} {} {} {} {} {}\n'.format(
+                len(filteredUser),
+                min(ageList),
+                sum(ageList)/len(ageList) if len(ageList) > 0 else -1,
+                max(ageList),
+                sum(womanByAge.values())/len(filteredUser)
+                    if len(filteredUser) > 0 else -1,
+                sum(firstTimeByAge.values()) / len(filteredUser)
+                    if len(filteredUser) > 0 else -1
+            ))
+
+        with open(pathAgeStats, 'w') as o:
+            o.write('ageMin ageMax nbUser nbWoman nbMan nbFirstTime\n')
+            for age in sorted(firstTimeByAge.keys()):
+                if age not in manByAge:
+                    manByAge[age] = 0
+                if age not in womanByAge:
+                    womanByAge[age] = 0
+                o.write('{} {} {} {} {} {}\n'.format(
+                    age * ageStep,
+                    (age+1) * ageStep,
+                    manByAge[age] + womanByAge[age],
+                    womanByAge[age],
+                    manByAge[age],
+                    firstTimeByAge[age]
+                ))

@@ -36,6 +36,7 @@ class User(object):
                                              )
         self.age = None
         self.sex = None
+        self.nbHourHMD = None
         if not os.path.exists(self.userResultFolder):
             os.makedirs(self.userResultFolder)
 
@@ -55,7 +56,7 @@ class User(object):
 
     def ParseFormAnswers(self):
         """Get infos from the form answers."""
-        if self.sex is None or self.age is None:
+        if self.sex is None or self.age is None or self.nbHourHMD is None:
             pathToForm = self.GetPathToUserFormAnswers()
             with open(pathToForm, 'r') as f:
                 for line in f:
@@ -65,6 +66,8 @@ class User(object):
                             self.sex = value
                         elif questionId == '2':
                             self.age = int(value)
+                        elif questionId == '4':
+                            self.nbHourHMD = float(value)
 
     def GetExistingTestPathList(self):
         """Return a list of path to existing test."""

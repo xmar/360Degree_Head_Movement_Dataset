@@ -74,7 +74,8 @@ def StoreAngularVelocity(processedResultList, filePath, isAggr):
             o.write('{} {}\n'.format(values, values*180/math.pi))
 
 
-def StoreAngularVelocityPerSegment(processedResultList, segmentSize, filePath):
+def StoreAngularVelocityPerSegment(processedResultList, segmentSize, filePath,
+                                   useRealTimestamp=True):
     """Compute the min, max, median angular velocity on all segments.
 
     :param segmentSize: the segment size in second
@@ -89,21 +90,27 @@ def StoreAngularVelocityPerSegment(processedResultList, segmentSize, filePath):
             self.pitchAngVel = list()
             self.rollAngVel = list()
 
-        def GetMinMedMaxString(self):
+        def GetMinMedMaxString(self, angVelTypeList):
             s = ''
-            for l in [self.angVelNorm, self.verticalAngVel,
-                      self.horizontalAngVel, self.yawAngVel, self.pitchAngVel,
-                      self.rollAngVel]:
-                minA = np.percentile(l, 5) if len(l) > 0 else -1
+            listOfOutputList = []
+            for angVelName in angVelTypeList:
+                listOfOutputList.append(getattr(self, angVelName))
+            for l in listOfOutputList:
+                minA = np.percentile(l, 10) if len(l) > 0 else -1
+                p25A = np.percentile(l, 25) if len(l) > 0 else -1
                 medA = np.percentile(l, 50) if len(l) > 0 else -1
-                maxA = np.percentile(l, 95) if len(l) > 0 else -1
-                s += '{}{} {} {}'.format(' ' if len(s) > 0 else '',
-                                         minA, medA, maxA)
+                p75A = np.percentile(l, 75) if len(l) > 0 else -1
+                maxA = np.percentile(l, 90) if len(l) > 0 else -1
+                s += '{}{} {} {} {} {}'.format(' ' if len(s) > 0 else '',
+                                         minA, p25A,  medA, p75A, maxA)
             return s
     for processedResult in processedResultList:
         angVel = processedResult.angularVelocityDict
         for t in angVel:
-            segmentId  = math.floor(t)
+            t_used = t
+            if not useRealTimestamp:
+             t_used -= processedResult.startOffsetInSecond + processedResult.skiptime
+            segmentId  = math.floor(t_used/segmentSize)
             if segmentId not in results:
                 results[segmentId] = AngVelValues()
             (q, w) = angVel[t]
@@ -124,17 +131,19 @@ def StoreAngularVelocityPerSegment(processedResultList, segmentSize, filePath):
         r.pitchAngVel = sorted(r.pitchAngVel)
         r.rollAngVel = sorted(r.rollAngVel)
     with open(filePath, 'w') as o:
-        o.write('segId minAngVel medAngVel maxAngVel minVerticalAngVel ' +
-                'medVerticalAngVel maxVerticalAngVel minHorizontalAngVel' +
-                'medHorizontalAngVel maxHorizontalAngVel' +
-                'minYawAngVel medYawAngVel maxYawAngVel minPitchAngVel ' +
-                'medPitchAngVel maxPitchAngVel minRollAngVel ' +
-                'medRollAngVel maxRollAngVel\n')
+        angVelTypeList = ['angVelNorm', 'verticalAngVel', 'horizontalAngVel',
+                          'yawAngVel', 'pitchAngVel', 'rollAngVel']
+        colName = 'segId'
+        for angVelName in angVelTypeList:
+            colName += ' min{0} 25{0} med{0} 75{0} max{0}'.format(
+                angVelName[0].upper() + angVelName[1:])
+        colName += '\n'
+        o.write(colName)
         firstSegId = min(results.keys())
         for segId in results:
             r = results[segId]
             o.write('{} {}\n'.format(segId - firstSegId,
-                                     r.GetMinMedMaxString()))
+                                     r.GetMinMedMaxString(angVelTypeList)))
 
 
 
@@ -184,13 +193,16 @@ class AggregatedResults(object):
         """Store angular velocity cdf to file."""
         StoreAngularVelocity(self.processedResultList, filePath, True)
 
-    def StoreAngularVelocityPerSegment(self, segmentSize, filePath):
+    def StoreAngularVelocityPerSegment(self, segmentSize, filePath,
+                                       useRealTimestamp=True):
         """Store angular velocity per segment to file.
 
         :param segmentSize: segment size in second
+        :param useRealTimestamp: if set to True will use real timestamp,
+        otherwise timestamp relatif to the beginning of the test
         """
         StoreAngularVelocityPerSegment(self.processedResultList,
-                                       segmentSize, filePath)
+                                       segmentSize, filePath, useRealTimestamp)
 
     def StorePositions(self, filePath, vmax=None):
         """Store the position matrix image in a file."""
@@ -662,7 +674,7 @@ class Statistics(object):
         self.progressBar['maximum'] = len(self.resultsContainers) + \
                                       len(self.resultsByVideo) + \
                                       len(self.resultsByUser) + \
-                                      len(self.resultsByAge)
+                                      len(self.resultsByAge) + 1
         #self.workingThread = threading.Thread(
             # target=partial(Statistics._ComputationWorkThread, self, withVideo)
             # )
@@ -683,16 +695,21 @@ class Statistics(object):
 
     def _ComputationWorkThread(self, withVideo):
         """Thread main function that do the actual computation."""
-        if not os.path.exists('results/statistics/individual'):
-            os.makedirs('results/statistics/individual')
-        if not os.path.exists('results/statistics/users'):
-            os.makedirs('results/statistics/users')
-        if not os.path.exists('results/statistics/videos'):
-            os.makedirs('results/statistics/videos')
-        if not os.path.exists('results/statistics/byAge'):
-            os.makedirs('results/statistics/byAge')
+        if not os.path.exists(PATH_TO_STATISTIC_RESULTS + '/individual'):
+            os.makedirs(PATH_TO_STATISTIC_RESULTS + '/individual')
+        if not os.path.exists(PATH_TO_STATISTIC_RESULTS + '/users'):
+            os.makedirs(PATH_TO_STATISTIC_RESULTS + '/users')
+        if not os.path.exists(PATH_TO_STATISTIC_RESULTS + '/videos'):
+            os.makedirs(PATH_TO_STATISTIC_RESULTS + '/videos')
+        if not os.path.exists(PATH_TO_STATISTIC_RESULTS + '/byAge'):
+            os.makedirs(PATH_TO_STATISTIC_RESULTS + '/byAge')
+        if not os.path.exists(PATH_TO_STATISTIC_RESULTS + '/total'):
+            os.makedirs(PATH_TO_STATISTIC_RESULTS + '/total')
         vmax = 0
         step = 0.03
+
+        self.userManager.StoreUserStats(PATH_TO_STATISTIC_RESULTS +
+                                        '/total/users')
 
         pool = ProcessingPool()
         for resultId in self.resultsContainers:
@@ -722,11 +739,11 @@ class Statistics(object):
             if rc.isNew:
                 processedResult = rc.GetProcessedResult(step)
                 processedResult.StorePositions(
-                    'results/statistics/individual/{}'.format(rc.resultId),
+                    PATH_TO_STATISTIC_RESULTS+'/individual/{}'.format(rc.resultId),
                     vmax=None
                 )
                 processedResult.StoreAngularVelocity(
-                    'results/statistics/individual/{}.txt'.format(rc.resultId)
+                    PATH_TO_STATISTIC_RESULTS+'/individual/{}.txt'.format(rc.resultId)
                 )
             return rc
         async_result = [
@@ -749,16 +766,16 @@ class Statistics(object):
             aggSize = len(resultsByUser)
             if aggSize > 0:
                 dumpPath = \
-                    'results/statistics/users/uid{}.dump'.format(userId)
+                    PATH_TO_STATISTIC_RESULTS+'/users/uid{}.dump'.format(userId)
                 ac = AggregateContainer.Load(dumpPath, step, aggSize)
                 if ac.isNew:
                     aggResult = sum(resultsByUser)
                     aggResult.StorePositions(
-                        'results/statistics/users/uid{}'.format(userId),
+                        PATH_TO_STATISTIC_RESULTS+'/users/uid{}'.format(userId),
                         vmax=None
                     )
                     aggResult.StoreAngularVelocity(
-                        'results/statistics/users/uid{}.txt'.format(userId)
+                        PATH_TO_STATISTIC_RESULTS+'/users/uid{}.txt'.format(userId)
                     )
                     # vmax = max(vmax,
                     #            aggResult.aggPositionMatrix.max())
@@ -780,19 +797,19 @@ class Statistics(object):
         def WorkerAge(resultsByAge, ageStep, age, step):
             aggSize = len(resultsByAge)
             if aggSize > 0:
-                dumpPath = 'results/statistics/byAge/{}_{}.dump'.format(
+                dumpPath = PATH_TO_STATISTIC_RESULTS+'/byAge/{}_{}.dump'.format(
                     age, age + ageStep
                     )
                 ac = AggregateContainer.Load(dumpPath, step, aggSize)
                 if ac.isNew:
                     aggResult = sum(resultsByAge)
                     aggResult.StorePositions(
-                        'results/statistics/byAge/{}_{}'.format(
+                        PATH_TO_STATISTIC_RESULTS+'/byAge/{}_{}'.format(
                             age, age + ageStep),
                         vmax=None
                     )
                     aggResult.StoreAngularVelocity(
-                        'results/statistics/byAge/{}_{}.txt'.format(
+                        PATH_TO_STATISTIC_RESULTS+'/byAge/{}_{}.txt'.format(
                             age, age + ageStep)
                     )
                     # vmax = max(vmax,
@@ -816,27 +833,27 @@ class Statistics(object):
         def WorkerVideo(resultsByVideo, videoId, step, withVideo):
             aggSize = len(resultsByVideo)
             if aggSize > 0:
-                dumpPath = 'results/statistics/videos/{}.dump'.format(videoId)
+                dumpPath = PATH_TO_STATISTIC_RESULTS+'/videos/{}.dump'.format(videoId)
                 ac = AggregateContainer.Load(dumpPath, step, aggSize)
                 if ac.isNew:
                     aggResult = sum(resultsByVideo)
                     aggResult.StorePositions(
-                        'results/statistics/videos/{}'.format(videoId),
+                        PATH_TO_STATISTIC_RESULTS+'/videos/{}'.format(videoId),
                         vmax=None
                     )
                     aggResult.StoreAngularVelocity(
-                        'results/statistics/videos/{}.txt'.format(videoId)
+                        PATH_TO_STATISTIC_RESULTS+'/videos/{}.txt'.format(videoId)
                     )
-                    segmentSize = 1
-                    aggResult.StoreAngularVelocityPerSegment(
-                        segmentSize=segmentSize,
-                        filePath='results/statistics/videos/' +
-                        '{}_angVelPerSegment_{}s.txt'.format(videoId,
-                                                             segmentSize)
-                    )
+                    for segmentSize in [1, 2, 3]:
+                        aggResult.StoreAngularVelocityPerSegment(
+                            segmentSize=segmentSize,
+                            filePath=PATH_TO_STATISTIC_RESULTS+'/videos/' +
+                            '{}_angVelPerSegment_{}s.txt'.format(videoId,
+                                                                 segmentSize)
+                        )
                     if withVideo:
                         aggResult.WriteVideo(
-                            'results/statistics/videos/{}.mkv'.format(videoId),
+                            PATH_TO_STATISTIC_RESULTS+'/videos/{}.mkv'.format(videoId),
                             fps=5,
                             segmentSize=1/5,
                             width=480,
@@ -857,6 +874,32 @@ class Statistics(object):
             r.get()
             self.progressBar['value'] += 1
             self.PrintProgress()
+
+        print('\r\033[2KProcess results total')
+        self.PrintProgress()
+        aggSize = len(self.resultsContainers)
+        dumpPath = PATH_TO_STATISTIC_RESULTS+'/total/{}.dump'.format('total')
+        ac = AggregateContainer.Load(dumpPath, step, aggSize)
+        if ac.isNew:
+            aggTotal = sum(self.resultsContainers.values())
+            aggTotal.StorePositions(
+                PATH_TO_STATISTIC_RESULTS+'/total/{}'.format('total'),
+                vmax=None
+            )
+            aggTotal.StoreAngularVelocity(
+                PATH_TO_STATISTIC_RESULTS+'/total/{}.txt'.format('total')
+            )
+            for segmentSize in [1, 2, 3]:
+                aggTotal.StoreAngularVelocityPerSegment(
+                    segmentSize=segmentSize,
+                    filePath=PATH_TO_STATISTIC_RESULTS+'/total/' +
+                    '{}_angVelPerSegment_{}s.txt'.format('total',
+                                                         segmentSize),
+                    useRealTimestamp=False
+                )
+            Store(ac, dumpPath)
+        self.progressBar['value'] += 1
+        self.PrintProgress()
 
         # def worker(videoId, processedResult):
         #     processedResult.WriteVideo(
