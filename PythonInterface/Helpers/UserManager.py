@@ -130,17 +130,23 @@ class UserManager(object):
                 manByAge[age] += 1
 
         with open(pathGlobalStats, 'w') as o:
-            o.write('nbUser minAge medAge maxAge ratioWoman ratioFirstTime\n')
-            o.write('{} {} {} {} {} {}\n'.format(
+            o.write('\\begin{tabular}{|c|c|c|c|c|c|}'
+                    '\n\hline\n'
+                    '\\textbf{Number of user}&\\textbf{Minimum age}&'
+                    '\\textbf{Average age}&\\textbf{Maximum age}&'
+                    '\\textbf{Ratio of woman}&\\textbf{Ratio of first times}'
+                    '\\\\\n\hline\n')
+            o.write('{}&{}&{:2.2f}&{}&{}\\%&{}\\%\\\\\n\hline\n'.format(
                 len(filteredUser),
                 min(ageList),
                 sum(ageList)/len(ageList) if len(ageList) > 0 else -1,
                 max(ageList),
-                sum(womanByAge.values())/len(filteredUser)
+                int(100*sum(womanByAge.values())/len(filteredUser))
                     if len(filteredUser) > 0 else -1,
-                sum(firstTimeByAge.values()) / len(filteredUser)
+                int(100*sum(firstTimeByAge.values()) / len(filteredUser))
                     if len(filteredUser) > 0 else -1
             ))
+            o.write('\end{tabular}\n')
 
         with open(pathAgeStats, 'w') as o:
             o.write('ageMin ageMax nbUser nbWoman nbMan nbFirstTime\n')
