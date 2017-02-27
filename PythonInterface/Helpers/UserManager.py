@@ -9,6 +9,7 @@ import logging
 import os
 import math
 import uuid
+import numpy as np
 
 global_user_manager = None
 
@@ -66,7 +67,7 @@ class UserManager(object):
                 if dirpath == rootResultFolder:
                     for d in dirnames:
                         d = d.rstrip()
-                        if len(d) > 4:
+                        if len(d) > 4 and d[0:4] == 'uid-':
                             uid = d[4:]
                             if len(uid) > 0 and uid not in self.userDict:
                                 self.logger.info(
@@ -122,7 +123,7 @@ class UserManager(object):
 
         :param pathId: the path to store the results without extension
         '''
-        pathGlobalStats = '{}_globalStats.txt'.format(pathId)
+        pathGlobalStats = '{}_globalStats.tex'.format(pathId)
         pathAgeStats = '{}_AgeStats.txt'.format(pathId)
 
         filteredUser = dict()  # remove users without tests
@@ -136,12 +137,16 @@ class UserManager(object):
         ageList = list()
         ageStep = 10
         firstTimeByAge = dict()
+        nbHourUsedIfNotFirstTime = list()
         for user in filteredUser.values():
             ageList.append(user.age)
             age = math.floor(user.age/ageStep)
             if age not in firstTimeByAge:
                 firstTimeByAge[age] = 0
-            firstTimeByAge[age] += 1 if user.nbHourHMD == 0 else 0
+            if user.nbHourHMD == 0:
+                firstTimeByAge[age] += 1
+            else:
+                nbHourUsedIfNotFirstTime.append(user.nbHourHMD)
             if user.sex == 'woman':
                 if age not in womanByAge:
                     womanByAge[age] = 0
@@ -150,6 +155,11 @@ class UserManager(object):
                 if age not in manByAge:
                     manByAge[age] = 0
                 manByAge[age] += 1
+
+        print('Average nb hours used if not first time = ',
+              sum(nbHourUsedIfNotFirstTime)/len(nbHourUsedIfNotFirstTime))
+        print('Median nb hours used if not first time = ',
+              np.percentile(nbHourUsedIfNotFirstTime, 50))
 
         with open(pathGlobalStats, 'w') as o:
             o.write('\\begin{tabular}{|c|c|c|c|c|c|}'
