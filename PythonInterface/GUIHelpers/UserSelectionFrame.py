@@ -41,15 +41,18 @@ class ExistingUserFrame(Frame):
         """Update the user list in the combobox."""
         module_logger.debug('Update existing user list')
         self.userListComboBox.subwidget('listbox').delete(0, END)
+        comboBoxId = 0
         for uid, userName in self.userManager.GetExistingUserList().items():
-            self.userListComboBox.insert(uid, '{}: {}'.format(uid, userName))
+            self.userListComboBox.insert(comboBoxId, '{}: {}'.format(userName,
+                                                                     uid))
+            comboBoxId += 1
 
     def PressedButton(self):
         """Callback when the self.useExistingUserButton is pressed."""
         selection = self.userListComboBox['selection']
         if (len(selection) > 0):
-            uid, name = selection.split(':')
-            uid = int(uid)
+            name, uid = selection.rstrip().split(':')
+            uid = uid.lstrip()
             module_logger.info(
                 'Existing user with id {} selected for a new test'.format(
                     uid))

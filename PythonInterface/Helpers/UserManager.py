@@ -8,6 +8,7 @@ from .User import User
 import logging
 import os
 import math
+import uuid
 
 global_user_manager = None
 
@@ -41,13 +42,13 @@ class UserManager(object):
         self.rootResultFolder = rootResultFolder
 
         self.userDict = dict()
-        self.maxUid = -1
+        # self.maxUid = -1
         if os.path.exists(self.pathToExistingUserFile):
             with open(self.pathToExistingUserFile, 'r') as i:
                 for line in i:
-                    info = line.split(';')
-                    uid = int(info[2])
-                    self.maxUid = max(uid, self.maxUid)
+                    info = line.rstrip().split(';')
+                    uid = info[2]
+                    # self.maxUid = max(uid, self.maxUid)
                     firstName = info[0]
                     lastName = info[1]
                     self.logger.info(
@@ -60,6 +61,25 @@ class UserManager(object):
                                               uid,
                                               rootResultFolder
                                               )
+        if os.path.exists(rootResultFolder):
+            for (dirpath, dirnames, filenames) in os.walk(rootResultFolder):
+                if dirpath == rootResultFolder:
+                    for d in dirnames:
+                        d = d.rstrip()
+                        if len(d) > 4:
+                            uid = d[4:]
+                            if len(uid) > 0 and uid not in self.userDict:
+                                self.logger.info(
+                                    'Add anonymous existing user:'
+                                    ' [{}] {} {}'.format(uid,
+                                                         'uid',
+                                                         uid)
+                                    )
+                                self.userDict[uid] = User('uid',
+                                                          uid,
+                                                          uid,
+                                                          rootResultFolder)
+
 
     def GetExistingUserList(self):
         """Return a dict of uid,string: first and last name."""
@@ -74,16 +94,18 @@ class UserManager(object):
 
     def AddNewUser(self, firstName, lastName):
         """Add a new user to the user dict and return the uid."""
-        self.maxUid += 1
+        newUid = uuid.uuid4()
+        while newUid in self.userDict:
+            newUid = uuid.uuid4()
         self.logger.info(
-            'Create a new user with uid {}: {} {}'.format(self.maxUid,
+            'Create a new user with uid {}: {} {}'.format(newUid,
                                                           firstName,
                                                           lastName)
             )
-        self.userDict[self.maxUid] = User(firstName, lastName, self.maxUid,
+        self.userDict[newUid] = User(firstName, lastName, newUid,
                                           self.rootResultFolder)
         self.StoreUserList()
-        return self.maxUid
+        return newUid
 
     def StoreUserList(self):
         """Store the user dict to the pathToExistingUserFile file."""

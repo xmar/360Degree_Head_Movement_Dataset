@@ -32,7 +32,7 @@ class User(object):
         self.lastName = userLastName
         self.uid = userId
         self.userResultFolder = os.path.join(rootResultFolder,
-                                             'uid'+str(self.uid)
+                                             'uid-'+str(self.uid)
                                              )
         self.age = None
         self.sex = None
