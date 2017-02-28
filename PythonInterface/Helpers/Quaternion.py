@@ -240,6 +240,18 @@ class Quaternion(object):
         return (q2-q1).Norm()
 
     @staticmethod
+    def OrthodromicDistance(q1, q2):
+        """Compute the orthodromic dist between two rotation quaternions."""
+        origine = Vector(x=1, y=0, z=0)
+        p1 = q1.Rotation(origine)
+        p2 = q2.Rotation(origine)
+        p = p1 * p2
+        # this below works because p1 and p2 are pur
+        dotProd = -p.w
+        vectProd = p.v
+        return math.atan2(vectProd.Norm(), dotProd)
+
+    @staticmethod
     def SLERP(q1, q2, k):
         """Compute the slerp interpolation of q1, q2 with a weight k."""
         if q1.Dot(q2) < 0:

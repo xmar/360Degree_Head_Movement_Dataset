@@ -293,6 +293,7 @@ class ProcessedResult(object):
         self.filteredQuaternions = dict()
         self.frameIds = dict()
         self.angularVelocityDict = dict()
+        self.maxOrthodromicDistance = dict()  # key: seg size for moving window
         self.positionMatrix = np.zeros((1, 1))
         firstTimestamp = None
         isSkiping = True
@@ -300,7 +301,7 @@ class ProcessedResult(object):
         self.__GetStartOffset(pathToOsvrClientIni)
         # alignRot is a rotation to align to the zero from Equi projection
         alignRot = Q.Quaternion.QuaternionFromAngleAxis(-math.pi/2,
-                                                        Q.Vector(0, 0 ,1))
+                                                        Q.Vector(0, 0, 1))
         with open(resultPath, 'r') as i:
             for line in i:
                 values = line.split(' ')
@@ -368,6 +369,32 @@ class ProcessedResult(object):
                 qList = qList[1:]
                 tList = tList[1:]
         self.__filterVelocity()
+
+    def ComputeMaxOrthodromicDistances(self, segSizeList):
+        """Compute the max ortho distance on moving windows.
+
+        :param segSizeList: the list of segment size to use
+        """
+        tmpDict = dict()  # key: timestamp, values: dict key: seg size,
+        # values maxOrthoDist
+        for t in sorted(self.filteredQuaternions.keys()):
+            tmpDict[t] = dict()
+            for segSize in segSizeList:
+                tmpDict[t][segSize] = 0
+            for t2 in sorted(tmpDict.keys()):
+                for segSize in segSizeList:
+                    if t - t2 <= segSize:
+                        tmpDict[t2][segSize] = \
+                            max(tmpDict[t2][segSize],
+                                Quaternion.OrthodromicDistance(
+                                    self.filteredQuaternions[t],
+                                    self.filteredQuaternions[t2]))
+        for segSize in segSizeList:
+            self.maxOrthodromicDistance[segSize] = list()
+        for t in tmpDict:
+            for segSize in tmpDict[t]:
+                self.maxOrthodromicDistance[segSize].append(
+                    tmpDict[t][segSize])
 
     def ComputePositions(self, width=50, height=50):
         """Compute the position matrix.
@@ -525,6 +552,7 @@ class ResultContainer(object):
                                                    skiptime=10,
                                                    step=step)
             self.processedResult.ComputeAngularVelocity()
+            self.ComputeMaxOrthodromicDistances([1,2,3,5,10])
             self.processedResult.ComputePositions(width=100, height=100)
             Store(self.processedResult, self.resultProcessedDumpPath)
         return self.processedResult
