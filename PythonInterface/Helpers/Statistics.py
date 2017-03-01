@@ -46,9 +46,10 @@ def StoreAngularVelocity(processedResultList, filePath, isAggr):
         horizontalAngVel.append(abs(w.z))
         verticalAngVel.append(
             (Q.Vector(w.x, w.y, 0)).Norm())
-        yawAngVel.append(abs(q.Rotation(Q.Vector(0, 0, 1)).v * w))
-        pitchAngVel.append(abs(q.Rotation(Q.Vector(0, 1, 0)).v * w))
-        rollAngVel.append(abs(q.Rotation(Q.Vector(1, 0, 0)).v * w))
+        q.Normalize()
+        yawAngVel.append(abs(q.Rotation(Q.Vector(0, 0, 1)) * w))
+        pitchAngVel.append(abs(q.Rotation(Q.Vector(0, 1, 0)) * w))
+        rollAngVel.append(abs(q.Rotation(Q.Vector(1, 0, 0)) * w))
     angVelNorm = sorted(angVelNorm)
     verticalAngVel = sorted(verticalAngVel)
     horizontalAngVel = sorted(horizontalAngVel)
@@ -120,9 +121,9 @@ def StoreAngularVelocityPerSegment(processedResultList, segmentSize, filePath,
             r.horizontalAngVel.append(abs(w.z))
             r.verticalAngVel.append(
                 (Q.Vector(w.x, w.y, 0)).Norm())
-            r.yawAngVel.append(abs(q.Rotation(Q.Vector(0, 0, 1)).v * w))
-            r.pitchAngVel.append(abs(q.Rotation(Q.Vector(0, 1, 0)).v * w))
-            r.rollAngVel.append(abs(q.Rotation(Q.Vector(1, 0, 0)).v * w))
+            r.yawAngVel.append(abs(q.Rotation(Q.Vector(0, 0, 1)) * w))
+            r.pitchAngVel.append(abs(q.Rotation(Q.Vector(0, 1, 0)) * w))
+            r.rollAngVel.append(abs(q.Rotation(Q.Vector(1, 0, 0)) * w))
     for segId in results:
         r = results[segId]
         r.angVelNorm = sorted(r.angVelNorm)
@@ -249,7 +250,7 @@ class AggregatedResults(object):
                         if t_real >= startTime and t_real <= endTime:
                             w, h = posMat.shape
                             q = result.filteredQuaternions[t]
-                            v = q.Rotation(Q.Vector(1, 0, 0)).v
+                            v = q.Rotation(Q.Vector(1, 0, 0))
                             theta, phi = v.ToPolar()
                             i = int(w*(theta + math.pi)/(2*math.pi))
                             j = int(h*phi/math.pi)
@@ -379,26 +380,29 @@ class ProcessedResult(object):
 
         :param segSizeList: the list of segment size to use
         """
-        tmpDict = dict()  # key: timestamp, values: dict key: seg size,
-        # values maxOrthoDist
-        for t in sorted(self.filteredQuaternions.keys()):
-            tmpDict[t] = dict()
-            for segSize in segSizeList:
-                tmpDict[t][segSize] = 0
-            for t2 in sorted(tmpDict.keys()):
-                for segSize in segSizeList:
-                    if t - t2 <= segSize:
-                        tmpDict[t2][segSize] = \
-                            max(tmpDict[t2][segSize],
-                                Q.Quaternion.OrthodromicDistance(
-                                    self.filteredQuaternions[t],
-                                    self.filteredQuaternions[t2]))
-        for segSize in segSizeList:
-            self.maxOrthodromicDistance[segSize] = list()
-        for t in tmpDict:
-            for segSize in tmpDict[t]:
-                self.maxOrthodromicDistance[segSize].append(
-                    tmpDict[t][segSize])
+        # tmpDict = dict()  # key: timestamp, values: dict key: seg size,
+        # # values maxOrthoDist
+        # for t in sorted(self.filteredQuaternions.keys()):
+        #     tmpDict[t] = dict()
+        #     for segSize in segSizeList:
+        #         tmpDict[t][segSize] = 0
+        #     for t2 in sorted(tmpDict.keys()):
+        #         for segSize in segSizeList:
+        #             if t - t2 <= segSize:
+        #                 tmpDict[t2][segSize] = \
+        #                     max(tmpDict[t2][segSize],
+        #                         Q.Quaternion.OrthodromicDistance(
+        #                             self.filteredQuaternions[t],
+        #                             self.filteredQuaternions[t2]))
+        # for segSize in segSizeList:
+        #     self.maxOrthodromicDistance[segSize] = list()
+        # for t in tmpDict:
+        #     for segSize in tmpDict[t]:
+        #         self.maxOrthodromicDistance[segSize].append(
+        #             tmpDict[t][segSize])
+        self.maxOrthodromicDistance = \
+            Q.ComputeMaxOrthodromicDistances(self.filteredQuaternions,
+                                             segSizeList)
 
     def ComputePositions(self, width=50, height=50):
         """Compute the position matrix.
@@ -409,7 +413,7 @@ class ProcessedResult(object):
         self.positionMatrix = np.zeros((width, height))
         for t in self.filteredQuaternions:
             q = self.filteredQuaternions[t]
-            v = q.Rotation(Q.Vector(1, 0, 0)).v
+            v = q.Rotation(Q.Vector(1, 0, 0))
             theta, phi = v.ToPolar()
             i = int(width*(theta + math.pi)/(2*math.pi))
             j = int(height*phi/math.pi)
@@ -557,7 +561,11 @@ class ResultContainer(object):
                                                    skiptime=10,
                                                    step=step)
             self.processedResult.ComputeAngularVelocity()
-            self.processedResult.ComputeMaxOrthodromicDistances([1,2,3,5,10])
+            self.processedResult.ComputeMaxOrthodromicDistances([1,
+                                                                 2,
+                                                                 3,
+                                                                 5,
+                                                                 10])
             self.processedResult.ComputePositions(width=100, height=100)
             Store(self.processedResult, self.resultProcessedDumpPath)
         return self.processedResult

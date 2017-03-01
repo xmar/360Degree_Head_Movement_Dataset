@@ -1,5 +1,7 @@
 #include <boost/python.hpp>
 #include <iostream>
+#include <map>
+#include <vector>
 
 typedef  double SCALAR;
 
@@ -60,6 +62,16 @@ void translate(not_unit_quaternion_exception const& e)
     // Use the Python 'C' API to set up an exception object
     PyErr_SetString(PyExc_RuntimeError, e.what());
 }
+
+struct vector_pickle_suite : boost::python::pickle_suite
+{
+  static
+  boost::python::tuple
+  getinitargs(Vector const& v)
+  {
+      return boost::python::make_tuple(v.GetX(), v.GetY(), v.GetZ());
+  }
+};
 
 class Quaternion
 {
@@ -225,6 +237,16 @@ private:
   bool m_isNormalized;
 };
 
+struct quaternion_pickle_suite : boost::python::pickle_suite
+{
+  static
+  boost::python::tuple
+  getinitargs(Quaternion const& q)
+  {
+      return boost::python::make_tuple(q.GetW(), q.GetV());
+  }
+};
+
 std::ostream& operator<<(std::ostream& o, const Quaternion& q) {return q.operator<<(o);}
 Quaternion operator+(const SCALAR& s, const Quaternion& q) {return Quaternion(s) + q;}
 Quaternion operator-(const SCALAR& s, const Quaternion& q) {return Quaternion(s) - q;}
@@ -239,6 +261,66 @@ Quaternion operator*(const Quaternion& q, const Vector& v) {return q * Quaternio
 Quaternion pow(const Quaternion& q, const SCALAR& k)
 {
   return Quaternion::pow(q, k);
+}
+
+boost::python::dict ComputeMaxOrthodromicDistances(boost::python::dict& filteredQuaternions,
+        boost::python::list& segSizeList)
+{
+  std::map<SCALAR, std::map<SCALAR, SCALAR>> ans;
+  SCALAR maxSegSize = 0;
+  for (size_t i = 0; i < boost::python::len(segSizeList); ++i)
+  {
+    SCALAR segSize = boost::python::extract<SCALAR>(segSizeList[i]);
+    ans[segSize] = std::map<SCALAR, SCALAR>();
+    maxSegSize = std::max(maxSegSize, segSize);
+  }
+  boost::python::list keys = filteredQuaternions.keys();
+  std::vector<SCALAR> keysToCheck;
+  SCALAR maxTimestamp = 0;
+  for (size_t i = 0; i < boost::python::len(keys); ++i)
+  {
+    SCALAR t = boost::python::extract<SCALAR>(keys[i]);
+    maxTimestamp = std::max(maxTimestamp, t);
+  }
+  for (size_t i = 0; i < boost::python::len(keys); ++i)
+  {
+    SCALAR t2 = boost::python::extract<SCALAR>(keys[i]);
+    Quaternion q2 = boost::python::extract<Quaternion>(filteredQuaternions[keys[i]]);
+    while(!keysToCheck.empty() && t2-keysToCheck[0] > maxSegSize)
+    {
+      keysToCheck.erase(keysToCheck.begin());
+    }
+    for (auto t1: keysToCheck)
+    {
+      for (size_t i = 0; i < boost::python::len(segSizeList); ++i)
+      {
+        SCALAR segSize = boost::python::extract<SCALAR>(segSizeList[i]);
+        if (maxTimestamp - t2 >= segSize)
+        {
+          ans[segSize][t2] = 0;
+          if (t2-t1 < segSize)
+          {
+            Quaternion q1 = boost::python::extract<Quaternion>(filteredQuaternions[t1]);
+            auto orthoDist = Quaternion::OrthodromicDistance(q1, q2);
+            ans[segSize][t1] = std::max(ans[segSize][t1], orthoDist);
+          }
+        }
+      }
+    }
+    keysToCheck.push_back(t2);
+  }
+  boost::python::dict outputDict;
+  for (size_t i = 0; i < boost::python::len(segSizeList); ++i)
+  {
+    SCALAR segSize = boost::python::extract<SCALAR>(segSizeList[i]);
+    boost::python::list outList;
+    for (auto k: ans[segSize])
+    {
+      outList.append(k.second);
+    }
+    outputDict[segSize] = outList;
+  }
+  return outputDict;
 }
 
 BOOST_PYTHON_MODULE(CQuaternion)
@@ -265,6 +347,7 @@ BOOST_PYTHON_MODULE(CQuaternion)
         .add_property("x", &Vector::GetX)
         .add_property("y", &Vector::GetY)
         .add_property("z", &Vector::GetZ)
+        .def_pickle(vector_pickle_suite())
     ;
 
   class_<Quaternion>("Quaternion")
@@ -273,19 +356,15 @@ BOOST_PYTHON_MODULE(CQuaternion)
         .def(init<Vector>(args("v")))
         .def(self_ns::str(self_ns::self))
         .def(self_ns::self + self_ns::self)
-        .def(self_ns::self + Vector())
         .def(Vector() + self_ns::self)
-        .def(self_ns::self + SCALAR())
         .def(SCALAR() + self_ns::self)
         .def(self_ns::self - self_ns::self)
+        .def(Vector() - self_ns::self)
         .def(SCALAR() - self_ns::self)
-        .def(self_ns::self - SCALAR())
         .def(-self_ns::self)
         .def(self_ns::self * self_ns::self)
         .def(SCALAR() * self_ns::self)
         .def(Vector() * self_ns::self)
-        .def(self_ns::self * Vector())
-        .def(self_ns::self * SCALAR())
         .def(self_ns::self / SCALAR())
         .def("DotProduct", &Quaternion::DotProduct)
         .def("Dot", &Quaternion::DotProduct)
@@ -312,5 +391,11 @@ BOOST_PYTHON_MODULE(CQuaternion)
         .def(pow(self_ns::self, SCALAR()))
         .add_property("w", &Quaternion::GetW)
         .add_property("v", &Quaternion::GetV)
+        .def_pickle(quaternion_pickle_suite())
     ;
+
+    def("ComputeMaxOrthodromicDistances", ComputeMaxOrthodromicDistances);
+
+    implicitly_convertible<SCALAR, Quaternion>();
+    implicitly_convertible<Vector, Quaternion>();
 }
