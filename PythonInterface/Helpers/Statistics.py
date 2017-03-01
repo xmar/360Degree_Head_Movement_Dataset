@@ -4,7 +4,8 @@ Author: Xavier Corbillon
 IMT Atlantique
 """
 
-import Helpers.Quaternion as Q
+# import Helpers.Quaternion as Q
+import Helpers.CQuaternion as Q
 import Helpers.FFmpeg as FFmpeg
 import math
 import numpy as np
@@ -322,6 +323,7 @@ class ProcessedResult(object):
                                                 )
                                      )
                     q = alignRot * q
+                    q.Normalize()
                     frameId = int(values[1])
                     self.frameIds[timestamp] = frameId
                     self.quaternions[timestamp] = q
@@ -362,7 +364,9 @@ class ProcessedResult(object):
                 # velocity = (Q.Quaternion.Distance(q1, q2) +
                 #             Q.Quaternion.Distance(q2, q3))/2
                 # velocity /= (tList[2]-tList[0])
-                velocity = Q.AverageAngularVelocity(q1, q2, tList[1]-tList[0]).v
+                velocity = Q.Quaternion.AverageAngularVelocity(q1,
+                                                               q2,
+                                                               tList[1]-tList[0])
                 self.angularVelocityDict[tList[0] + (tList[1]-tList[0])/2] = \
                     (q2, velocity)
 
@@ -386,7 +390,7 @@ class ProcessedResult(object):
                     if t - t2 <= segSize:
                         tmpDict[t2][segSize] = \
                             max(tmpDict[t2][segSize],
-                                Quaternion.OrthodromicDistance(
+                                Q.Quaternion.OrthodromicDistance(
                                     self.filteredQuaternions[t],
                                     self.filteredQuaternions[t2]))
         for segSize in segSizeList:
@@ -483,6 +487,7 @@ class ProcessedResult(object):
                                            k)
             else:
                 q_mid = self.quaternions[t1]
+            q_mid.Normalize()
             self.filteredQuaternions[t_mid] = q_mid
 
     def StoreAngularVelocity(self, filePath):
@@ -552,7 +557,7 @@ class ResultContainer(object):
                                                    skiptime=10,
                                                    step=step)
             self.processedResult.ComputeAngularVelocity()
-            self.ComputeMaxOrthodromicDistances([1,2,3,5,10])
+            self.processedResult.ComputeMaxOrthodromicDistances([1,2,3,5,10])
             self.processedResult.ComputePositions(width=100, height=100)
             Store(self.processedResult, self.resultProcessedDumpPath)
         return self.processedResult

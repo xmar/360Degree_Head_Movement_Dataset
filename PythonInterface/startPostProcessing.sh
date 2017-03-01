@@ -2,4 +2,4 @@
 
 source .env/bin/activate
 pip install -r requirements.txt
-./PostProcessing.py --withVideo
+./PostProcessing.py #--withVideo

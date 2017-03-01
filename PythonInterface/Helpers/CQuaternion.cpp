@@ -24,14 +24,24 @@ public:
                     m_z*v.m_x-m_x*v.m_z,
                     m_x*v.m_y-m_y*v.m_x);}
 
+  Vector VectorProduct(const Vector& v) const {return (*this)^v; }
+
   std::ostream& operator<<(std::ostream& o) const
   {
     o << "(" << m_x << ", "  << m_y << ", " <<  m_z << ")";
     return o;
   }
-  const auto& GetX(void) const {return m_x;}
-  const auto& GetY(void) const {return m_y;}
-  const auto& GetZ(void) const {return m_z;}
+
+  auto ToPolar(void) const
+  {
+    auto theta = std::atan2(m_y, m_x);
+    auto phi = std::acos(m_z/Norm());
+    return boost::python::make_tuple(theta, phi);
+  }
+
+  auto GetX(void) const {return m_x;}
+  auto GetY(void) const {return m_y;}
+  auto GetZ(void) const {return m_z;}
 private:
   SCALAR m_x;
   SCALAR m_y;
@@ -40,13 +50,24 @@ private:
 std::ostream& operator<<(std::ostream& o, const Vector& v) {return v.operator<<(o);}
 Vector operator*(const SCALAR& s, const Vector& v) {return v * s;}
 
+struct not_unit_quaternion_exception : std::exception
+{
+  char const* what() const throw() { return "Rotation require unit quaternion"; }
+};
+
+void translate(not_unit_quaternion_exception const& e)
+{
+    // Use the Python 'C' API to set up an exception object
+    PyErr_SetString(PyExc_RuntimeError, e.what());
+}
+
 class Quaternion
 {
 public:
-  Quaternion(void): m_w(0), m_v() {}
-  Quaternion(const SCALAR& w, const Vector& v): m_w(w), m_v(v) {}
-  Quaternion(const SCALAR& w): m_w(w), m_v() {}
-  Quaternion(const Vector& v): m_w(0), m_v(v) {}
+  Quaternion(void): m_w(0), m_v(), m_isNormalized(false) {}
+  Quaternion(const SCALAR& w, const Vector& v): m_w(w), m_v(v), m_isNormalized(false) {}
+  Quaternion(const SCALAR& w): m_w(w), m_v(), m_isNormalized(false) {}
+  Quaternion(const Vector& v): m_w(0), m_v(v), m_isNormalized(false) {}
 
   SCALAR DotProduct(const Quaternion& q) const {return m_w*q.m_w + m_v.DotProduct(q.m_v);}
   SCALAR Norm(void) const {return std::sqrt(DotProduct(*this));}
@@ -65,8 +86,8 @@ public:
   }
   Quaternion operator*(const Quaternion& q) const
   {
-    return Quaternion(m_w*q.m_w + m_v*q.m_v,
-                      m_w*q.m_v + q.m_w*m_v + m_v ^ q.m_v);
+    return Quaternion((m_w*q.m_w) - (m_v*q.m_v),
+                      (m_w*q.m_v) + (q.m_w*m_v) + (m_v ^ q.m_v));
   }
   Quaternion operator*(SCALAR s) const
   {
@@ -82,9 +103,126 @@ public:
     o << m_w << " + "  << m_v.GetX() << " i + " << m_v.GetY() << " j + " << m_v.GetZ() << " k ";
     return o;
   }
+
+  Quaternion& operator=(const Quaternion& q)
+  {
+    m_w = q.m_w;
+    m_v = q.m_v;
+    return *this;
+  }
+
+  void Normalize(void)
+  {
+    if (!m_isNormalized)
+    {
+      *this = *this / Norm();
+      m_isNormalized = true;
+    }
+  }
+
+  auto GetW(void) const {return m_w;}
+  auto GetV(void) const {return m_v;}
+
+  bool IsPur(void) const {return m_w == 0;}
+  Quaternion Conj(void) const {return Quaternion(m_w, -m_v);}
+  Quaternion Inv(void) const {return m_isNormalized ? Conj() : Conj()/std::pow(Norm(),2);}
+  Vector Rotation(const Vector& v) const
+  {
+    if (m_isNormalized)
+    {
+      return ((*this)*v*(this->Conj())).GetV();
+    }
+    else
+    {
+      throw not_unit_quaternion_exception();
+    }
+  }
+
+  static Quaternion Exp(const Quaternion& q)
+  {
+    auto expW = std::exp(q.m_w);
+    auto normV = q.m_v.Norm();
+    return Quaternion(std::cos(normV)*expW,
+                      normV != 0 ? std::sin(normV) * (q.m_v / normV) : q.m_v
+                    );
+  }
+  static Quaternion Log(const Quaternion& q)
+  {
+    auto expW = std::log(q.Norm());
+    auto normV = q.m_v.Norm();
+    auto normQ = q.Norm();
+    return Quaternion(std::log(normQ),
+                      normV != 0 && normQ != 0 ? std::acos(q.m_w/normQ)*(q.m_v/normV) : q.m_v
+                    );
+  }
+  static SCALAR Distance(const Quaternion& q1, const Quaternion& q2)
+  {
+    return (q2-q1).Norm();
+  }
+
+  static SCALAR OrthodromicDistance(const Quaternion& q1, const Quaternion& q2)
+  {
+    auto origine = Vector(1, 0, 0);
+    Quaternion p1 = q1.Rotation(origine);
+    Quaternion p2 = q2.Rotation(origine);
+    auto p = p1 * p2;
+    // p1 and p2 are pur so -p.m_w is the dot product and p.m_v is the vector product of p1 and p2
+    return std::atan2(p.m_v.Norm(), -p.m_w);
+  }
+
+  static Quaternion pow(const Quaternion& q, const SCALAR& k)
+  {
+    return Quaternion::Exp(Quaternion::Log(q) * k);
+  }
+
+  static Quaternion SLERP(const Quaternion& q1, const Quaternion& q2, const SCALAR& k)
+  {
+    if (q1.DotProduct(q2) < 0)
+    {
+      return q1 * Quaternion::pow(q1.Inv() * (-q2), k);
+    }
+    else
+    {
+      return q1 * Quaternion::pow(q1.Inv() * q2, k);
+    }
+  }
+
+  static  Quaternion QuaternionFromAngleAxis(const SCALAR& theta, const Vector& u)
+  {
+    return Quaternion(std::cos(theta/2), std::sin(theta/2)*(u/u.Norm()));
+  }
+
+  static Vector AverageAngularVelocity(Quaternion q1, Quaternion q2, const SCALAR& deltaT)
+  {
+    if (q1.DotProduct(q2) < 0)
+    {
+      q2 = -q2;
+    }
+    if (!q1.IsPur())
+    {
+      if (!q1.m_isNormalized)
+      {
+        q1.Normalize();
+      }
+      q1 = q1.Rotation(Vector(1, 0, 0));
+    }
+    if (!q2.IsPur())
+    {
+      if (!q2.m_isNormalized)
+      {
+        q2.Normalize();
+      }
+      q2 = q2.Rotation(Vector(1, 0, 0));
+    }
+    auto deltaQ = q2 - q1;
+    auto W = (deltaQ * (2.0 / deltaT))*q1.Inv();
+    return W.m_v;
+  }
+
 private:
   SCALAR m_w;
   Vector m_v;
+  bool m_isNormalized;
 };
 
 std::ostream& operator<<(std::ostream& o, const Quaternion& q) {return q.operator<<(o);}
@@ -98,9 +236,17 @@ Quaternion operator*(const SCALAR& s, const Quaternion& q) {return q * s;}
 Quaternion operator*(const Vector& v, const Quaternion& q) {return Quaternion(v) * q;}
 Quaternion operator*(const Quaternion& q, const Vector& v) {return q * Quaternion(v);}
 
+Quaternion pow(const Quaternion& q, const SCALAR& k)
+{
+  return Quaternion::pow(q, k);
+}
+
 BOOST_PYTHON_MODULE(CQuaternion)
 {
   using namespace boost::python;
+
+  register_exception_translator<not_unit_quaternion_exception>(&translate);
+
   class_<Vector>("Vector")
         .def(init<SCALAR, SCALAR, SCALAR>(args("x", "y", "z")))
         .def(self_ns::str(self_ns::self))
@@ -113,7 +259,12 @@ BOOST_PYTHON_MODULE(CQuaternion)
         .def(self_ns::self / SCALAR())
         .def(self_ns::self ^ self_ns::self)
         .def("DotProduct", &Vector::DotProduct)
+        .def("VectorProduct", &Vector::VectorProduct)
         .def("Norm", &Vector::Norm)
+        .def("ToPolar", &Vector::ToPolar)
+        .add_property("x", &Vector::GetX)
+        .add_property("y", &Vector::GetY)
+        .add_property("z", &Vector::GetZ)
     ;
 
   class_<Quaternion>("Quaternion")
@@ -132,9 +283,34 @@ BOOST_PYTHON_MODULE(CQuaternion)
         .def(-self_ns::self)
         .def(self_ns::self * self_ns::self)
         .def(SCALAR() * self_ns::self)
+        .def(Vector() * self_ns::self)
+        .def(self_ns::self * Vector())
         .def(self_ns::self * SCALAR())
         .def(self_ns::self / SCALAR())
         .def("DotProduct", &Quaternion::DotProduct)
+        .def("Dot", &Quaternion::DotProduct)
         .def("Norm", &Quaternion::Norm)
+        .def("Normalize", &Quaternion::Normalize)
+        .def("IsPur", &Quaternion::IsPur)
+        .def("Conj", &Quaternion::Conj)
+        .def("Inv", &Quaternion::Inv)
+        .def("Rotation", &Quaternion::Rotation)
+        .def("Exp", &Quaternion::Exp)
+        .staticmethod("Exp")
+        .def("Log", &Quaternion::Log)
+        .staticmethod("Log")
+        .def("Distance", &Quaternion::Distance)
+        .staticmethod("Distance")
+        .def("OrthodromicDistance", &Quaternion::OrthodromicDistance)
+        .staticmethod("OrthodromicDistance")
+        .def("SLERP", &Quaternion::SLERP)
+        .staticmethod("SLERP")
+        .def("QuaternionFromAngleAxis", &Quaternion::QuaternionFromAngleAxis)
+        .staticmethod("QuaternionFromAngleAxis")
+        .def("AverageAngularVelocity", &Quaternion::AverageAngularVelocity)
+        .staticmethod("AverageAngularVelocity")
+        .def(pow(self_ns::self, SCALAR()))
+        .add_property("w", &Quaternion::GetW)
+        .add_property("v", &Quaternion::GetV)
     ;
 }
