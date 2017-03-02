@@ -34,11 +34,17 @@ public:
     return o;
   }
 
-  auto ToPolar(void) const
+  auto ToSpherical(void) const
   {
     auto theta = std::atan2(m_y, m_x);
     auto phi = std::acos(m_z/Norm());
     return boost::python::make_tuple(theta, phi);
+  }
+
+  static Vector FromSpherical(SCALAR theta, SCALAR phi)
+  {
+    auto sinP = std::sin(phi);
+    return Vector(sinP*std::cos(theta), sinP*std::sin(theta), std::cos(phi));
   }
 
   auto GetX(void) const {return m_x;}
@@ -333,6 +339,68 @@ boost::python::dict ComputeMaxOrthodromicDistances(boost::python::dict& filtered
   return outputDict;
 }
 
+constexpr SCALAR PI = 3.141592653589793238L;
+
+boost::python::list ComputeVision(boost::python::dict& filteredQuaternions,
+    size_t width, size_t height, SCALAR horizontalFoVAngle, SCALAR verticalFoVAngle)
+{
+  boost::python::list ans;
+  for (size_t i = 0; i < width; ++i)
+  {
+    boost::python::list l;
+    l.append(0);
+    l *= height;
+    ans.append(l);
+  }
+  auto y = std::sqrt(1-std::cos(horizontalFoVAngle));
+  auto z = std::sqrt(1-std::cos(verticalFoVAngle));
+  auto a = Vector(1, y, z);
+  auto b = Vector(1, y, -z);
+  auto c = Vector(1, -y, -z);
+  auto d = Vector(1, -y, z);
+  // compute inward normal to the delimitation plan
+  auto n_ab = a ^ b;
+  n_ab = n_ab/n_ab.Norm();
+  auto n_bc = b ^ c;
+  n_bc = n_bc/n_bc.Norm();
+  auto n_cd = c ^ d;
+  n_cd = n_cd/n_cd.Norm();
+  auto n_da = d ^ a;
+  n_da = n_da/n_da.Norm();
+  boost::python::list keys = filteredQuaternions.keys();
+  size_t len = boost::python::len(keys);
+  for (size_t k = 0; k < len; ++k)
+  {
+    Quaternion q = boost::python::extract<Quaternion>(filteredQuaternions[keys[k]]);
+    std::vector<std::tuple<size_t, size_t>>  hits;
+    for (size_t i = 0; i < width; ++i)
+    {
+      for (size_t j = 0; j < height; ++j)
+      {
+        auto theta = (2.0*PI*i - PI)/width;
+        auto phi = (PI*j)/height;
+        //p is the direction vector of this pixel
+        auto p = Vector::FromSpherical(theta, phi);
+        auto p_headFrame = q.Conj().Rotation(p);
+        // test if p is inside the viewport
+        if (p_headFrame * n_ab > 0 &&
+                p_headFrame * n_bc > 0 &&
+                p_headFrame * n_cd > 0 &&
+                p_headFrame * n_da > 0)
+        {
+          hits.push_back(std::make_tuple(i, j));
+        }
+      }
+    }
+    size_t hitsCount = hits.size();
+    for (auto tuple: hits)
+    {
+        ans[std::get<0>(tuple)][std::get<1>(tuple)] += 1.0/(len*hitsCount);
+    }
+  }
+  return ans;
+}
+
 BOOST_PYTHON_MODULE(CQuaternion)
 {
   using namespace boost::python;
@@ -353,7 +421,9 @@ BOOST_PYTHON_MODULE(CQuaternion)
         .def("DotProduct", &Vector::DotProduct)
         .def("VectorProduct", &Vector::VectorProduct)
         .def("Norm", &Vector::Norm)
-        .def("ToPolar", &Vector::ToPolar)
+        .def("ToSpherical", &Vector::ToSpherical)
+        .def("FromSpherical", &Vector::FromSpherical)
+        .staticmethod("FromSpherical")
         .add_property("x", &Vector::GetX)
         .add_property("y", &Vector::GetY)
         .add_property("z", &Vector::GetZ)
@@ -405,6 +475,7 @@ BOOST_PYTHON_MODULE(CQuaternion)
     ;
 
     def("ComputeMaxOrthodromicDistances", ComputeMaxOrthodromicDistances);
+    def("ComputeVision", ComputeVision);
 
     implicitly_convertible<SCALAR, Quaternion>();
     implicitly_convertible<Vector, Quaternion>();

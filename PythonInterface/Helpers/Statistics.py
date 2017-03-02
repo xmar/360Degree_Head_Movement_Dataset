@@ -111,8 +111,8 @@ def StoreAngularVelocityPerSegment(processedResultList, segmentSize, filePath,
         for t in angVel:
             t_used = t
             if not useRealTimestamp:
-             t_used -= processedResult.startOffsetInSecond + processedResult.skiptime
-            segmentId  = math.floor(t_used/segmentSize)
+                t_used -= processedResult.startOffsetInSecond + processedResult.skiptime
+            segmentId = math.floor(t_used/segmentSize)
             if segmentId not in results:
                 results[segmentId] = AngVelValues()
             (q, w) = angVel[t]
@@ -148,7 +148,6 @@ def StoreAngularVelocityPerSegment(processedResultList, segmentSize, filePath,
                                      r.GetMinMedMaxString(angVelTypeList)))
 
 
-
 class AggregatedResults(object):
     """Contains aggregated results (i.e. results of results)."""
 
@@ -158,9 +157,11 @@ class AggregatedResults(object):
         To fill it use the __add__ function.
         """
         self.aggPositionMatrix = None
+        self.aggVisionMatrix = None
         self.processedResultList = list()
         self.minStartTime = sys.maxsize
         self.maxEndTime = 0
+        self.maxOrthodromicDistance = None
         self.step = None
 
     def __add__(self, processedResult):
@@ -169,17 +170,35 @@ class AggregatedResults(object):
             processedResult = processedResult.GetProcessedResult()
         self.processedResultList.append(processedResult)
         self.minStartTime = min(self.minStartTime,
-                                min(processedResult.quaternions.keys()) +
-                                processedResult.startOffsetInSecond +
-                                processedResult.skiptime)
+                                min(processedResult.quaternions.keys())  # +
+                                # processedResult.startOffsetInSecond +
+                                # processedResult.skiptime
+                                )
         self.maxEndTime = max(self.minStartTime,
-                              max(processedResult.quaternions.keys()) +
-                              processedResult.startOffsetInSecond +
-                              processedResult.skiptime)
+                              max(processedResult.quaternions.keys())  # +
+                              # processedResult.startOffsetInSecond +
+                              # processedResult.skiptime
+                              )
+        if self.maxOrthodromicDistance is None:
+            self.maxOrthodromicDistance = \
+                processedResult.maxOrthodromicDistance.copy()
+        else:
+            for segSize in processedResult.maxOrthodromicDistance:
+                if segSize not in self.maxOrthodromicDistance:
+                    print('ERR: cannot aggregate if do not '
+                          'have the same segSize')
+                    exit(1)
+                else:
+                    self.maxOrthodromicDistance[segSize] += \
+                        processedResult.maxOrthodromicDistance[segSize]
         if self.aggPositionMatrix is None:
             self.aggPositionMatrix = processedResult.positionMatrix.copy()
         else:
             self.aggPositionMatrix += processedResult.positionMatrix
+        if self.aggVisionMatrix is None:
+            self.aggVisionMatrix = processedResult.visionMatrix.copy()
+        else:
+            self.aggVisionMatrix += processedResult.visionMatrix
         if self.step is None:
             self.step = processedResult.step
         if self.step != processedResult.step:
@@ -190,6 +209,24 @@ class AggregatedResults(object):
     def Normalize(self):
         """Normalize the values."""
         self.aggPositionMatrix /= self.aggPositionMatrix.sum()
+
+    def StoreOrthodromicDistance(self, filePath):
+        """Store the orthodrimic distance CDFs to a file."""
+        with open(filePath, 'w') as o:
+            o.write('cdf')
+            for segSize in self.maxOrthodromicDistance:
+                o.write(' {}s'.format(segSize))
+                self.maxOrthodromicDistance[segSize].sort()
+            o.write('\n')
+            for r in range(0, 101):
+                o.write('{}'.format(r))
+                for segSize in self.maxOrthodromicDistance:
+                    val = np.percentile(self.maxOrthodromicDistance[segSize],
+                                        r) \
+                        if len(self.maxOrthodromicDistance[segSize]) > 0 \
+                        else -1
+                    o.write(' {}'.format(val))
+                o.write('\n')
 
     def StoreAngularVelocity(self, filePath):
         """Store angular velocity cdf to file."""
@@ -209,12 +246,13 @@ class AggregatedResults(object):
     def StorePositions(self, filePath, vmax=None):
         """Store the position matrix image in a file."""
         if vmax is not None:
-            plt.matshow(self.aggPositionMatrix, vmin=0, vmax=vmax, cmap='hot')
+            plt.matshow(self.aggPositionMatrix, vmin=0, vmax=vmax, cmap='hot',
+                        aspect=0.5)
         else:
-            plt.matshow(self.aggPositionMatrix, cmap='hot')
+            plt.matshow(self.aggPositionMatrix, cmap='hot', aspect=0.5)
         plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
-        plt.matshow(self.aggPositionMatrix, cmap='hot')
+        plt.matshow(self.aggPositionMatrix, cmap='hot', aspect=0.5)
         plt.savefig('{}_2.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
         with open('{}_pos.txt'.format(filePath), 'w') as o:
@@ -224,6 +262,20 @@ class AggregatedResults(object):
                 for j in range(0, height):
                     o.write('{} {} {}\n'.format(
                         i, j, self.aggPositionMatrix[j, i]
+                    ))
+
+    def StoreVision(self, filePath):
+        """Store the position matrix image in a file."""
+        plt.matshow(self.aggVisionMatrix, cmap='hot', aspect=0.5)
+        plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
+        plt.close()
+        with open('{}_vision.txt'.format(filePath), 'w') as o:
+            o.write('i j value\n')
+            height, width = self.aggVisionMatrix.shape
+            for i in range(0, width):
+                for j in range(0, height):
+                    o.write('{} {} {}\n'.format(
+                        i, j, self.aggVisionMatrix[j, i]
                     ))
 
     def WriteVideo(self, outputPath, fps, segmentSize, width, height):
@@ -263,12 +315,63 @@ class AggregatedResults(object):
                     vmax = max(vmax, posMat.max())
 
             for (startTime, endTime, posMat) in posMatList:
-                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0)
+                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0, aspect=0.5)
                 buffer_ = io.BytesIO()
                 plt.axis('off')
                 plt.title('From {:6.2f} s to {:6.2f} s'.format(startTime,
                                                                endTime))
                 plt.colorbar()
+                plt.savefig(buffer_, format = "png",
+                            bbox_inches='tight',
+                            pad_inches = 0)
+                buffer_.seek(0)
+                image = PIL.Image.open(buffer_)
+                image.load()
+                buffer_.close()
+                plt.close()
+                vo.AddPicture(image)
+                plt.close()
+
+    def WriteVideoVision(self, outputPath, fps, segmentSize, width, height,
+                         horizontalFoVAngle, verticalFoVAngle):
+        """Generate a video of the average position in time."""
+        with FFmpeg.VideoWrite(outputPath,
+                               width=width,
+                               height=height,
+                               fps=fps) as vo:
+            posMatList = list()
+            vmax = 0
+            for timestamp in np.arange(self.minStartTime,
+                                       self.maxEndTime-segmentSize,
+                                       1/fps):
+                startTime = timestamp
+                endTime = timestamp + segmentSize
+                posMat = np.zeros(self.aggPositionMatrix.shape)
+                posMatList.append((startTime, endTime, posMat))
+
+            for result in self.processedResultList:
+                for (startTime, endTime, posMat) in posMatList:
+                    h, w = posMat.shape
+                    d = dict((t, q) for (t, q) in result.filteredQuaternions.items()
+                             if t >= startTime and t < endTime)
+                    ans = Q.ComputeVision(d, w, h,
+                                          horizontalFoVAngle, verticalFoVAngle)
+                    for i in range(len(ans)):
+                        for j in range(len(ans[i])):
+                            posMat[j, i] += ans[i][j]
+            for (startTime, endTime, posMat) in posMatList:
+                sumPos = posMat.sum()
+                if sumPos > 0:
+                    posMat /= sumPos
+                vmax = max(vmax, posMat.max())
+
+            for (startTime, endTime, posMat) in posMatList:
+                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0, aspect=0.5)
+                buffer_ = io.BytesIO()
+                plt.axis('off')
+                plt.title('From {:6.2f} s to {:6.2f} s'.format(startTime,
+                                                               endTime))
+                # plt.colorbar()
                 plt.savefig(buffer_, format = "png",
                             bbox_inches='tight',
                             pad_inches = 0)
@@ -297,6 +400,7 @@ class ProcessedResult(object):
         self.angularVelocityDict = dict()
         self.maxOrthodromicDistance = dict()  # key: seg size for moving window
         self.positionMatrix = np.zeros((1, 1))
+        self.visionMatrix = np.zeros((1, 1))
         firstTimestamp = None
         isSkiping = True
         pathToOsvrClientIni = '{}.ini'.format(os.path.dirname(resultPath))
@@ -414,12 +518,63 @@ class ProcessedResult(object):
         for t in self.filteredQuaternions:
             q = self.filteredQuaternions[t]
             v = q.Rotation(Q.Vector(1, 0, 0))
-            theta, phi = v.ToPolar()
+            theta, phi = v.ToSpherical()
             i = int(width*(theta + math.pi)/(2*math.pi))
             j = int(height*phi/math.pi)
             self.positionMatrix[j, i] += 1
         if len(self.filteredQuaternions) > 0:
             self.positionMatrix /= self.positionMatrix.sum()
+
+    def ComputeVision(self, width=50, height=50, horizontalFoVAngle=110,
+                      verticalFoVAngle=90):
+        """Compute the vision matrix.
+
+        The vision matrix is the matrix that contains the probability of vision
+        of each pixel in an equirectangular projection.
+
+        :param width: the width of the equirectangular picture generated
+        :param height: the height of the equirectangular picture generated
+        """
+        self.visionMatrix = np.zeros((width, height))
+        # #  compute viewport delimination vector in the original orientation
+        # y = math.sqrt(1-math.cos(horizontalFoVAngle))
+        # z = math.sqrt(1-math.cos(verticalFoVAngle))
+        # a = Q.Vector(1, y, z)
+        # b = Q.Vector(1, y, -z)
+        # c = Q.Vector(1, -y, -z)
+        # d = Q.Vector(1, -y, z)
+        # # compute inward normal to the delimitation plan
+        # n_ab = a ^ b
+        # n_ab = n_ab/n_ab.Norm()
+        # n_bc = b ^ c
+        # n_bc = n_bc/n_bc.Norm()
+        # n_cd = c ^ d
+        # n_cd = n_cd/n_cd.Norm()
+        # n_da = d ^ a
+        # n_da = n_da/n_da.Norm()
+        # for t in self.filteredQuaternions:
+        #     q = self.filteredQuaternions[t]
+        #     for i in range(0, width):
+        #         for j in range(0, height):
+        #             theta = (2*math.pi*i - math.pi)/width
+        #             phi = math.pi*j/height
+        #             # p is the direction vector of this pixel
+        #             p = Q.Vector.FromSpherical(theta, phi)
+        #             p_headFrame = q.Conj().Rotation(p)
+        #             # test if p is inside the viewport
+        #             if p_headFrame * n_ab > 0 and \
+        #                     p_headFrame * n_bc > 0 and \
+        #                     p_headFrame * n_cd > 0 and \
+        #                     p_headFrame * n_da > 0:
+        #                 self.visionMatrix[j, i] += 1
+        ans = Q.ComputeVision(self.filteredQuaternions, width, height,
+                              horizontalFoVAngle, verticalFoVAngle)
+        for i in range(len(ans)):
+            for j in range(len(ans[i])):
+                self.visionMatrix[j, i] = ans[i][j]
+        if len(self.filteredQuaternions) > 0:
+            self.visionMatrix /= self.visionMatrix.sum()
+
 
     def __filterVelocity(self):
         """Fill the angularVelocityWindow tuple."""
@@ -501,12 +656,13 @@ class ProcessedResult(object):
     def StorePositions(self, filePath, vmax=None):
         """Store the position matrix image in a file."""
         if vmax is not None:
-            plt.matshow(self.positionMatrix, vmin=0, vmax=vmax, cmap='hot')
+            plt.matshow(self.positionMatrix, vmin=0, vmax=vmax, cmap='hot',
+                        aspect=0.5)
         else:
-            plt.matshow(self.positionMatrix, cmap='hot')
+            plt.matshow(self.positionMatrix, cmap='hot', aspect=0.5)
         plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
-        plt.matshow(self.positionMatrix, cmap='hot')
+        plt.matshow(self.positionMatrix, cmap='hot', aspect=0.5)
         plt.savefig('{}_2.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
         with open('{}_pos.txt'.format(filePath), 'w') as o:
@@ -567,6 +723,9 @@ class ResultContainer(object):
                                                                  5,
                                                                  10])
             self.processedResult.ComputePositions(width=100, height=100)
+            self.processedResult.ComputeVision(width=100, height=50,
+                                               horizontalFoVAngle=110,
+                                               verticalFoVAngle=90)
             Store(self.processedResult, self.resultProcessedDumpPath)
         return self.processedResult
 
@@ -807,16 +966,23 @@ class Statistics(object):
             aggSize = len(resultsByUser)
             if aggSize > 0:
                 dumpPath = \
-                    PATH_TO_STATISTIC_RESULTS+'/users/uid{}.dump'.format(userId)
+                    PATH_TO_STATISTIC_RESULTS+'/users/uid-{}.dump'.format(userId)
                 ac = AggregateContainer.Load(dumpPath, step, aggSize)
                 if ac.isNew:
                     aggResult = sum(resultsByUser)
                     aggResult.StorePositions(
-                        PATH_TO_STATISTIC_RESULTS+'/users/uid{}'.format(userId),
+                        PATH_TO_STATISTIC_RESULTS+'/users/uid-{}'.format(userId),
                         vmax=None
                     )
+                    aggResult.StoreVision(
+                        PATH_TO_STATISTIC_RESULTS+'/users/uid-{}_vision'.format(userId)
+                    )
                     aggResult.StoreAngularVelocity(
-                        PATH_TO_STATISTIC_RESULTS+'/users/uid{}.txt'.format(userId)
+                        PATH_TO_STATISTIC_RESULTS+'/users/uid-{}.txt'.format(userId)
+                    )
+                    aggResult.StoreOrthodromicDistance(
+                        PATH_TO_STATISTIC_RESULTS +
+                        '/users/uid-{}_orthoDist.txt'.format(userId)
                     )
                     # vmax = max(vmax,
                     #            aggResult.aggPositionMatrix.max())
@@ -849,9 +1015,17 @@ class Statistics(object):
                             age, age + ageStep),
                         vmax=None
                     )
+                    aggResult.StoreVision(
+                        PATH_TO_STATISTIC_RESULTS+'/byAge/{}_{}_vision'.format(
+                            age, age + ageStep)
+                    )
                     aggResult.StoreAngularVelocity(
                         PATH_TO_STATISTIC_RESULTS+'/byAge/{}_{}.txt'.format(
                             age, age + ageStep)
+                    )
+                    aggResult.StoreOrthodromicDistance(
+                        PATH_TO_STATISTIC_RESULTS +
+                        '/byAge/{}_{}_orthoDist.txt'.format(age, age + ageStep)
                     )
                     # vmax = max(vmax,
                     #            aggResult.aggPositionMatrix.max())
@@ -882,8 +1056,15 @@ class Statistics(object):
                         PATH_TO_STATISTIC_RESULTS+'/videos/{}'.format(videoId),
                         vmax=None
                     )
+                    aggResult.StoreVision(
+                        PATH_TO_STATISTIC_RESULTS+'/videos/{}_vision'.format(videoId)
+                    )
                     aggResult.StoreAngularVelocity(
                         PATH_TO_STATISTIC_RESULTS+'/videos/{}.txt'.format(videoId)
+                    )
+                    aggResult.StoreOrthodromicDistance(
+                        PATH_TO_STATISTIC_RESULTS +
+                        '/videos/{}_orthoDist.txt'.format(videoId)
                     )
                     for segmentSize in [1, 2, 3]:
                         aggResult.StoreAngularVelocityPerSegment(
@@ -893,12 +1074,15 @@ class Statistics(object):
                                                                  segmentSize)
                         )
                     if withVideo:
-                        aggResult.WriteVideo(
+                        # aggResult.WriteVideo(
+                        aggResult.WriteVideoVision(
                             PATH_TO_STATISTIC_RESULTS+'/videos/{}.mkv'.format(videoId),
                             fps=5,
                             segmentSize=1/5,
                             width=480,
-                            height=480
+                            height=480,
+                            horizontalFoVAngle=110,
+                            verticalFoVAngle=90
                         )
                     # vmax = max(vmax,
                     #            aggResult.aggPositionMatrix.max())
@@ -927,8 +1111,14 @@ class Statistics(object):
                 PATH_TO_STATISTIC_RESULTS+'/total/{}'.format('total'),
                 vmax=None
             )
+            aggTotal.StoreVision(
+                PATH_TO_STATISTIC_RESULTS+'/total/{}_vision'.format('total')
+            )
             aggTotal.StoreAngularVelocity(
                 PATH_TO_STATISTIC_RESULTS+'/total/{}.txt'.format('total')
+            )
+            aggTotal.StoreOrthodromicDistance(
+                PATH_TO_STATISTIC_RESULTS+'/total/{}.txt'.format('orthoDist')
             )
             for segmentSize in [1, 2, 3]:
                 aggTotal.StoreAngularVelocityPerSegment(
