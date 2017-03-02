@@ -146,7 +146,9 @@ public:
     }
     else
     {
-      throw not_unit_quaternion_exception();
+      Quaternion q = *this;
+      q.Normalize();
+      return (q*v*q.Conj()).GetV();
     }
   }
 
@@ -268,39 +270,47 @@ boost::python::dict ComputeMaxOrthodromicDistances(boost::python::dict& filtered
 {
   std::map<SCALAR, std::map<SCALAR, SCALAR>> ans;
   SCALAR maxSegSize = 0;
+  std::vector<SCALAR> ssl;
   for (size_t i = 0; i < boost::python::len(segSizeList); ++i)
   {
     SCALAR segSize = boost::python::extract<SCALAR>(segSizeList[i]);
+    ssl.push_back(segSize);
     ans[segSize] = std::map<SCALAR, SCALAR>();
     maxSegSize = std::max(maxSegSize, segSize);
   }
   boost::python::list keys = filteredQuaternions.keys();
+  std::vector<SCALAR> keysList;
   std::vector<SCALAR> keysToCheck;
+  std::map<SCALAR, Quaternion> quaternionMap;
   SCALAR maxTimestamp = 0;
   for (size_t i = 0; i < boost::python::len(keys); ++i)
   {
     SCALAR t = boost::python::extract<SCALAR>(keys[i]);
+    keysList.push_back(t);
+    Quaternion q = boost::python::extract<Quaternion>(filteredQuaternions[keys[i]]);
+    q.Normalize();
+    quaternionMap[t] = q;
     maxTimestamp = std::max(maxTimestamp, t);
   }
-  for (size_t i = 0; i < boost::python::len(keys); ++i)
+  for (size_t i = 0; i < keysList.size(); ++i)
   {
-    SCALAR t2 = boost::python::extract<SCALAR>(keys[i]);
-    Quaternion q2 = boost::python::extract<Quaternion>(filteredQuaternions[keys[i]]);
+    SCALAR& t2 = keysList[i];
+    Quaternion& q2 = quaternionMap[t2];
     while(!keysToCheck.empty() && t2-keysToCheck[0] > maxSegSize)
     {
       keysToCheck.erase(keysToCheck.begin());
     }
     for (auto t1: keysToCheck)
     {
-      for (size_t i = 0; i < boost::python::len(segSizeList); ++i)
+      for (size_t i = 0; i < ssl.size(); ++i)
       {
-        SCALAR segSize = boost::python::extract<SCALAR>(segSizeList[i]);
+        SCALAR& segSize = ssl[i];
         if (maxTimestamp - t2 >= segSize)
         {
           ans[segSize][t2] = 0;
           if (t2-t1 < segSize)
           {
-            Quaternion q1 = boost::python::extract<Quaternion>(filteredQuaternions[t1]);
+            Quaternion& q1 = quaternionMap[t1];
             auto orthoDist = Quaternion::OrthodromicDistance(q1, q2);
             ans[segSize][t1] = std::max(ans[segSize][t1], orthoDist);
           }
@@ -310,9 +320,9 @@ boost::python::dict ComputeMaxOrthodromicDistances(boost::python::dict& filtered
     keysToCheck.push_back(t2);
   }
   boost::python::dict outputDict;
-  for (size_t i = 0; i < boost::python::len(segSizeList); ++i)
+  for (size_t i = 0; i < ssl.size(); ++i)
   {
-    SCALAR segSize = boost::python::extract<SCALAR>(segSizeList[i]);
+    SCALAR segSize = ssl[i];
     boost::python::list outList;
     for (auto k: ans[segSize])
     {
