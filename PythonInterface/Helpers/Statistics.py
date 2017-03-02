@@ -300,7 +300,7 @@ class AggregatedResults(object):
                         t_real = t # + result.startOffsetInSecond + \
                                  # result.skiptime
                         if t_real >= startTime and t_real <= endTime:
-                            w, h = posMat.shape
+                            h, w = posMat.shape
                             q = result.filteredQuaternions[t]
                             v = q.Rotation(Q.Vector(1, 0, 0))
                             theta, phi = v.ToPolar()
@@ -322,8 +322,8 @@ class AggregatedResults(object):
                                                                endTime))
                 plt.colorbar()
                 plt.savefig(buffer_, format = "png",
-                            bbox_inches='tight',
-                            pad_inches = 0)
+                            bbox_inches='tight') # ,
+                            # pad_inches = 0)
                 buffer_.seek(0)
                 image = PIL.Image.open(buffer_)
                 image.load()
@@ -332,12 +332,13 @@ class AggregatedResults(object):
                 vo.AddPicture(image)
                 plt.close()
 
-    def WriteVideoVision(self, outputPath, fps, segmentSize, width, height,
+    def WriteVideoVision(self, outputPath, fps, segmentSize, widthVideo,
+                         heightVideo, widthEqui, heightEqui,
                          horizontalFoVAngle, verticalFoVAngle):
         """Generate a video of the average position in time."""
         with FFmpeg.VideoWrite(outputPath,
-                               width=width,
-                               height=height,
+                               width=widthVideo,
+                               height=heightVideo,
                                fps=fps) as vo:
             posMatList = list()
             vmax = 0
@@ -346,7 +347,7 @@ class AggregatedResults(object):
                                        1/fps):
                 startTime = timestamp
                 endTime = timestamp + segmentSize
-                posMat = np.zeros(self.aggPositionMatrix.shape)
+                posMat = np.zeros((heightEqui, widthEqui))
                 posMatList.append((startTime, endTime, posMat))
 
             for result in self.processedResultList:
@@ -366,12 +367,12 @@ class AggregatedResults(object):
                 vmax = max(vmax, posMat.max())
 
             for (startTime, endTime, posMat) in posMatList:
-                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0, aspect=0.5)
+                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0) #, aspect=0.5)
                 buffer_ = io.BytesIO()
                 plt.axis('off')
                 plt.title('From {:6.2f} s to {:6.2f} s'.format(startTime,
                                                                endTime))
-                # plt.colorbar()
+                plt.colorbar()
                 plt.savefig(buffer_, format = "png",
                             bbox_inches='tight',
                             pad_inches = 0)
@@ -514,7 +515,7 @@ class ProcessedResult(object):
         :param width: the width of the equirectangular picture generated
         :param height: the height of the equirectangular picture generated
         """
-        self.positionMatrix = np.zeros((width, height))
+        self.positionMatrix = np.zeros((height, width))
         for t in self.filteredQuaternions:
             q = self.filteredQuaternions[t]
             v = q.Rotation(Q.Vector(1, 0, 0))
@@ -535,7 +536,7 @@ class ProcessedResult(object):
         :param width: the width of the equirectangular picture generated
         :param height: the height of the equirectangular picture generated
         """
-        self.visionMatrix = np.zeros((width, height))
+        self.visionMatrix = np.zeros((height, width))
         # #  compute viewport delimination vector in the original orientation
         # y = math.sqrt(1-math.cos(horizontalFoVAngle))
         # z = math.sqrt(1-math.cos(verticalFoVAngle))
@@ -1079,8 +1080,10 @@ class Statistics(object):
                             PATH_TO_STATISTIC_RESULTS+'/videos/{}.mkv'.format(videoId),
                             fps=5,
                             segmentSize=1/5,
-                            width=480,
-                            height=480,
+                            widthVideo=960,
+                            heightVideo=480,
+                            widthEqui=100,
+                            heightEqui=50,
                             horizontalFoVAngle=110,
                             verticalFoVAngle=90
                         )
