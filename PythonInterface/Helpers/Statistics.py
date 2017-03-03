@@ -408,12 +408,8 @@ class ProcessedResult(object):
         pathToOsvrClientIni = '{}.ini'.format(os.path.dirname(resultPath))
         self.__GetStartOffset(pathToOsvrClientIni)
         # alignRot is a rotation to align to the zero from Equi projection
-        # alignRot = Q.Quaternion.QuaternionFromAngleAxis(-math.pi/2,
-        #                                                 Q.Vector(0, 0, 1))
-        alignRot = Q.Quaternion.QuaternionFromAngleAxis(math.pi/2,
-                                                        Q.Vector(0, 0, 1)) * \
-                   Q.Quaternion.QuaternionFromAngleAxis(math.pi/2,
-                                                        Q.Vector(1, 0, 0))
+        alignRot = Q.Quaternion.QuaternionFromAngleAxis(-math.pi/2,
+                                                        Q.Vector(0, 0, 1))
         with open(resultPath, 'r') as i:
             for line in i:
                 values = line.split(' ')
@@ -428,17 +424,12 @@ class ProcessedResult(object):
                 else:
                     timestamp += self.startOffsetInSecond + self.skiptime
                     q = Q.Quaternion(w=float(values[2]),
-                                    #  v=Q.Vector(x=-float(values[5]),
-                                    #             y=-float(values[3]),
-                                    #             z=float(values[4])
-                                    #             )
                                       v=Q.Vector(x=float(values[3]),
                                                  y=float(values[4]),
                                                  z=float(values[5])
                                                  )
                                      )
-                    # q = alignRot * q
-                    # q = alignRot.Conj() * q * alignRot
+                    q = alignRot * q
                     q.Normalize()
                     frameId = int(values[1])
                     self.frameIds[timestamp] = frameId
