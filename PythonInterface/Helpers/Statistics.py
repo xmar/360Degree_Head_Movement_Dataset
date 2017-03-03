@@ -24,6 +24,7 @@ import sys
 
 PATH_TO_STATISTIC_RESULTS = 'results/statistics'
 
+ORIGINAL_POSITION = Q.Vector(1, 0, 0)
 
 def StoreAngularVelocity(processedResultList, filePath, isAggr):
     """Store angular velocity cdf to file."""
@@ -246,13 +247,13 @@ class AggregatedResults(object):
     def StorePositions(self, filePath, vmax=None):
         """Store the position matrix image in a file."""
         if vmax is not None:
-            plt.matshow(self.aggPositionMatrix, vmin=0, vmax=vmax, cmap='hot',
-                        aspect=0.5)
+            plt.matshow(self.aggPositionMatrix, vmin=0, vmax=vmax, cmap='hot'
+                        )
         else:
-            plt.matshow(self.aggPositionMatrix, cmap='hot', aspect=0.5)
+            plt.matshow(self.aggPositionMatrix, cmap='hot')
         plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
-        plt.matshow(self.aggPositionMatrix, cmap='hot', aspect=0.5)
+        plt.matshow(self.aggPositionMatrix, cmap='hot')
         plt.savefig('{}_2.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
         with open('{}_pos.txt'.format(filePath), 'w') as o:
@@ -266,7 +267,7 @@ class AggregatedResults(object):
 
     def StoreVision(self, filePath):
         """Store the position matrix image in a file."""
-        plt.matshow(self.aggVisionMatrix, cmap='hot', aspect=0.5)
+        plt.matshow(self.aggVisionMatrix, cmap='hot')
         plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
         with open('{}_vision.txt'.format(filePath), 'w') as o:
@@ -302,7 +303,7 @@ class AggregatedResults(object):
                         if t_real >= startTime and t_real <= endTime:
                             h, w = posMat.shape
                             q = result.filteredQuaternions[t]
-                            v = q.Rotation(Q.Vector(1, 0, 0))
+                            v = q.Rotation(ORIGINAL_POSITION)
                             theta, phi = v.ToPolar()
                             i = int(w*(theta + math.pi)/(2*math.pi))
                             j = int(h*phi/math.pi)
@@ -315,7 +316,7 @@ class AggregatedResults(object):
                     vmax = max(vmax, posMat.max())
 
             for (startTime, endTime, posMat) in posMatList:
-                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0, aspect=0.5)
+                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0)
                 buffer_ = io.BytesIO()
                 plt.axis('off')
                 plt.title('From {:6.2f} s to {:6.2f} s'.format(startTime,
@@ -367,7 +368,7 @@ class AggregatedResults(object):
                 vmax = max(vmax, posMat.max())
 
             for (startTime, endTime, posMat) in posMatList:
-                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0) #, aspect=0.5)
+                plt.matshow(posMat, cmap='hot', vmax=vmax, vmin=0)
                 buffer_ = io.BytesIO()
                 plt.axis('off')
                 plt.title('From {:6.2f} s to {:6.2f} s'.format(startTime,
@@ -407,8 +408,12 @@ class ProcessedResult(object):
         pathToOsvrClientIni = '{}.ini'.format(os.path.dirname(resultPath))
         self.__GetStartOffset(pathToOsvrClientIni)
         # alignRot is a rotation to align to the zero from Equi projection
-        alignRot = Q.Quaternion.QuaternionFromAngleAxis(-math.pi/2,
-                                                        Q.Vector(0, 0, 1))
+        # alignRot = Q.Quaternion.QuaternionFromAngleAxis(-math.pi/2,
+        #                                                 Q.Vector(0, 0, 1))
+        alignRot = Q.Quaternion.QuaternionFromAngleAxis(math.pi/2,
+                                                        Q.Vector(0, 0, 1)) * \
+                   Q.Quaternion.QuaternionFromAngleAxis(math.pi/2,
+                                                        Q.Vector(1, 0, 0))
         with open(resultPath, 'r') as i:
             for line in i:
                 values = line.split(' ')
@@ -423,12 +428,17 @@ class ProcessedResult(object):
                 else:
                     timestamp += self.startOffsetInSecond + self.skiptime
                     q = Q.Quaternion(w=float(values[2]),
-                                     v=Q.Vector(x=float(values[3]),
-                                                y=float(values[4]),
-                                                z=float(values[5])
-                                                )
+                                    #  v=Q.Vector(x=-float(values[5]),
+                                    #             y=-float(values[3]),
+                                    #             z=float(values[4])
+                                    #             )
+                                      v=Q.Vector(x=float(values[3]),
+                                                 y=float(values[4]),
+                                                 z=float(values[5])
+                                                 )
                                      )
-                    q = alignRot * q
+                    # q = alignRot * q
+                    # q = alignRot.Conj() * q * alignRot
                     q.Normalize()
                     frameId = int(values[1])
                     self.frameIds[timestamp] = frameId
@@ -518,7 +528,7 @@ class ProcessedResult(object):
         self.positionMatrix = np.zeros((height, width))
         for t in self.filteredQuaternions:
             q = self.filteredQuaternions[t]
-            v = q.Rotation(Q.Vector(1, 0, 0))
+            v = q.Rotation(ORIGINAL_POSITION)
             theta, phi = v.ToSpherical()
             i = int(width*(theta + math.pi)/(2*math.pi))
             j = int(height*phi/math.pi)
@@ -645,6 +655,7 @@ class ProcessedResult(object):
                 q_mid = Q.Quaternion.SLERP(self.quaternions[t1],
                                            self.quaternions[t2],
                                            k)
+                # q_mid = self.quaternions[t1]
             else:
                 q_mid = self.quaternions[t1]
             q_mid.Normalize()
@@ -657,13 +668,13 @@ class ProcessedResult(object):
     def StorePositions(self, filePath, vmax=None):
         """Store the position matrix image in a file."""
         if vmax is not None:
-            plt.matshow(self.positionMatrix, vmin=0, vmax=vmax, cmap='hot',
-                        aspect=0.5)
+            plt.matshow(self.positionMatrix, vmin=0, vmax=vmax, cmap='hot'
+                        )
         else:
-            plt.matshow(self.positionMatrix, cmap='hot', aspect=0.5)
+            plt.matshow(self.positionMatrix, cmap='hot')
         plt.savefig('{}.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
-        plt.matshow(self.positionMatrix, cmap='hot', aspect=0.5)
+        plt.matshow(self.positionMatrix, cmap='hot')
         plt.savefig('{}_2.pdf'.format(filePath), bbox_inches='tight')
         plt.close()
         with open('{}_pos.txt'.format(filePath), 'w') as o:

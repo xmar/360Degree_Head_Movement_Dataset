@@ -241,13 +241,14 @@ void DrawWorld(
     auto frameInfo = roomMesh->Draw(projectionGL, viewGL, sampleShader, std::move(deadlineTP));
 
     auto q = ToQuaternion(pose.rotation);
-    Quaternion v(0, 1, 0, 0);
-    Eigen::AngleAxisd angleAxisX(0.5*M_PI, Eigen::Vector3d::UnitX());
-    Eigen::AngleAxisd angleAxisZ(0.5*M_PI, Eigen::Vector3d::UnitZ());
-    Quaternion rotToOSVRX(angleAxisX);
-    Quaternion rotToOSVRZ(angleAxisZ);
-    Quaternion rotToOSVR = rotToOSVRZ*rotToOSVRX;
-    Quaternion rot = rotToOSVR*q*rotToOSVR.conjugate();
+    // Quaternion v(0, 1, 0, 0);
+    // Eigen::AngleAxisd angleAxisX(0.5*M_PI, Eigen::Vector3d::UnitX());
+    // Eigen::AngleAxisd angleAxisZ(0.5*M_PI, Eigen::Vector3d::UnitZ());
+    // Quaternion rotToOSVRX(angleAxisX);
+    // Quaternion rotToOSVRZ(angleAxisZ);
+    // Quaternion rotToOSVR = rotToOSVRZ*rotToOSVRX;
+    // Quaternion rot = rotToOSVR*q*rotToOSVR.conjugate();
+    Quaternion rot(q.w(), -q.z(), -q.x(), q.y());
 
 
     // if(frameInfo.m_timestamp > zero && firstFrame)
@@ -271,7 +272,16 @@ void DrawWorld(
       logWriter->Stop();
       quit = true;
     }
-    //library.OpenGL->toolkit->swapBuffers(library.OpenGL->toolkit->data, 0);
+    // Quaternion r(q.w(), q.z(), q.x(), -q.y());
+    // Quaternion i(0, 1, 0, 0);
+    // Quaternion j(0, 0, 1, 0);
+    // Quaternion k(0, 0, 0, 1);
+    // Quaternion ri = r*i*r.conjugate();
+    // std::cout << "x'=("<<ri.x()<<"; "<< ri.y()<<"; " << ri.z()<<") ; ";
+    // Quaternion rj = r*j*r.conjugate();
+    // std::cout << "y'=("<<rj.x()<<"; "<< rj.y()<<"; " << rj.z()<<") ; ";
+    // Quaternion rk = r*k*r.conjugate();
+    // std::cout << "z'=("<<rk.x()<<"; "<< rk.y()<<"; " << rk.z()<<") ; " << std::endl;
   }
 }
 

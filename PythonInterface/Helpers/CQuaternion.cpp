@@ -377,16 +377,25 @@ boost::python::list ComputeVision(boost::python::dict& filteredQuaternions,
     {
       for (size_t j = 0; j < height; ++j)
       {
-        auto theta = (2.0*PI*i - PI)/width;
-        auto phi = (PI*j)/height;
+        auto theta = ((2.0*PI*i)/width);
+        auto phi = PI-(PI*j)/height;
         //p is the direction vector of this pixel
         auto p = Vector::FromSpherical(theta, phi);
         auto p_headFrame = q.Conj().Rotation(p);
+
+        // auto n_ab_rot = q.Rotation(n_ab);
+        // auto n_bc_rot = q.Rotation(n_bc);
+        // auto n_cd_rot = q.Rotation(n_cd);
+        // auto n_da_rot = q.Rotation(n_da);
         // test if p is inside the viewport
         if (p_headFrame * n_ab > 0 &&
                 p_headFrame * n_bc > 0 &&
                 p_headFrame * n_cd > 0 &&
                 p_headFrame * n_da > 0)
+        // if (p * n_ab_rot > 0 &&
+        //     p * n_bc_rot > 0 &&
+        //     p * n_cd_rot > 0 &&
+        //     p * n_da_rot > 0)
         {
           hits.push_back(std::make_tuple(i, j));
         }
