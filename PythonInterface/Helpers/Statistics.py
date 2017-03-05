@@ -24,7 +24,7 @@ import sys
 
 PATH_TO_STATISTIC_RESULTS = 'results/statistics'
 
-ORIGINAL_POSITION = Q.Vector(1, 0, 0)
+ORIGINAL_POSITION = Q.Vector(-1, 0, 0)
 
 def StoreAngularVelocity(processedResultList, filePath, isAggr):
     """Store angular velocity cdf to file."""
@@ -344,7 +344,7 @@ class AggregatedResults(object):
             posMatList = list()
             vmax = 0
             for timestamp in np.arange(self.minStartTime,
-                                       self.maxEndTime-segmentSize,
+                                       self.maxEndTime,#-segmentSize,
                                        1/fps):
                 startTime = timestamp
                 endTime = timestamp + segmentSize
@@ -407,9 +407,7 @@ class ProcessedResult(object):
         isSkiping = True
         pathToOsvrClientIni = '{}.ini'.format(os.path.dirname(resultPath))
         self.__GetStartOffset(pathToOsvrClientIni)
-        # alignRot is a rotation to align to the zero from Equi projection
-        alignRot = Q.Quaternion.QuaternionFromAngleAxis(-math.pi/2,
-                                                        Q.Vector(0, 0, 1))
+
         with open(resultPath, 'r') as i:
             for line in i:
                 values = line.split(' ')
@@ -429,7 +427,7 @@ class ProcessedResult(object):
                                                  z=float(values[5])
                                                  )
                                      )
-                    q = alignRot * q
+                    # print('x\'=',q.Rotation(Q.Vector(1, 0, 0)),'y\'=',q.Rotation(Q.Vector(0, 1, 0)),'z\'=',q.Rotation(Q.Vector(0, 0, 1)))
                     q.Normalize()
                     frameId = int(values[1])
                     self.frameIds[timestamp] = frameId

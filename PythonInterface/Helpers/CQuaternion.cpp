@@ -377,8 +377,8 @@ boost::python::list ComputeVision(boost::python::dict& filteredQuaternions,
     {
       for (size_t j = 0; j < height; ++j)
       {
-        auto theta = ((2.0*PI*i)/width);
-        auto phi = PI-(PI*j)/height;
+        auto theta = PI-((2.0*PI*i)/width);
+        auto phi = (PI*j)/height;
         //p is the direction vector of this pixel
         auto p = Vector::FromSpherical(theta, phi);
         auto p_headFrame = q.Conj().Rotation(p);

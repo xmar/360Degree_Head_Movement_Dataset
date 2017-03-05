@@ -156,10 +156,12 @@ class UserManager(object):
                     manByAge[age] = 0
                 manByAge[age] += 1
 
-        print('Average nb hours used if not first time = ',
-              sum(nbHourUsedIfNotFirstTime)/len(nbHourUsedIfNotFirstTime))
-        print('Median nb hours used if not first time = ',
-              np.percentile(nbHourUsedIfNotFirstTime, 50))
+        if len(nbHourUsedIfNotFirstTime) > 0:
+            print('Average nb hours used if not first time = ',
+                  sum(nbHourUsedIfNotFirstTime)/len(nbHourUsedIfNotFirstTime)
+                  )
+            print('Median nb hours used if not first time = ',
+                  np.percentile(nbHourUsedIfNotFirstTime, 50))
 
         with open(pathGlobalStats, 'w') as o:
             o.write('\\begin{tabular}{|c|c|c|c|c|c|}'

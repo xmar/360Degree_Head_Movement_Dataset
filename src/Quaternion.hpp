@@ -14,6 +14,7 @@ namespace IMT {
   typedef Eigen::Quaterniond Quaternion;
 
   inline Quaternion ToQuaternion(const OSVR_Quaternion& quat) {return osvr::util::fromQuat(quat);}
+  //return Quaternion(osvrQuatGetW(&quat), -osvrQuatGetZ(&quat), -osvrQuatGetX(&quat), osvrQuatGetY(&quat));}
 
   inline bool operator==(const Quaternion& quat1, const Quaternion& quat2)
   {
@@ -27,10 +28,6 @@ namespace IMT {
 
   inline std::ostream& operator<< (std::ostream& stream, const Quaternion& quat)
   {
-    //in (O, z, x, y)
     stream << quat.w() << " " << quat.x() << " " << quat.y() << " " << quat.z();
-    //in (O, x, y, z)
-    // stream << quat.w() << " " << quat.z() << " " << quat.x() << " " << -quat.y();
-    // stream << -quat.y() << " " << -quat.x() << " " << quat.z() << " " << -quat.w();
   }
 }

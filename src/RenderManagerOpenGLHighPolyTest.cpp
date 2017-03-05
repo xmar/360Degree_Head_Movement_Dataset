@@ -243,12 +243,12 @@ void DrawWorld(
     auto q = ToQuaternion(pose.rotation);
     // Quaternion v(0, 1, 0, 0);
     // Eigen::AngleAxisd angleAxisX(0.5*M_PI, Eigen::Vector3d::UnitX());
-    // Eigen::AngleAxisd angleAxisZ(0.5*M_PI, Eigen::Vector3d::UnitZ());
+    Eigen::AngleAxisd angleAxisZ(-0.5*M_PI, Eigen::Vector3d::UnitZ());
     // Quaternion rotToOSVRX(angleAxisX);
-    // Quaternion rotToOSVRZ(angleAxisZ);
+    Quaternion rotToOSVRZ(angleAxisZ);
     // Quaternion rotToOSVR = rotToOSVRZ*rotToOSVRX;
     // Quaternion rot = rotToOSVR*q*rotToOSVR.conjugate();
-    Quaternion rot(q.w(), -q.z(), -q.x(), q.y());
+    Quaternion rot = rotToOSVRZ*Quaternion(q.w(), -q.z(), -q.x(), -q.y());
 
 
     // if(frameInfo.m_timestamp > zero && firstFrame)
