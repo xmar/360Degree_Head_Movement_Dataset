@@ -164,23 +164,21 @@ class UserManager(object):
                   np.percentile(nbHourUsedIfNotFirstTime, 50))
 
         with open(pathGlobalStats, 'w') as o:
-            o.write('\\begin{tabular}{|c|c|c|c|c|c|}'
-                    '\n\hline\n'
-                    '\\textbf{Number of user}&\\textbf{Minimum age}&'
-                    '\\textbf{Average age}&\\textbf{Maximum age}&'
-                    '\\textbf{Ratio of woman}&\\textbf{Ratio of first times}'
-                    '\\\\\n\hline\n')
-            o.write('{}&{}&{:2.2f}&{}&{}\\%&{}\\%\\\\\n\hline\n'.format(
-                len(filteredUser),
-                min(ageList),
-                sum(ageList)/len(ageList) if len(ageList) > 0 else -1,
-                max(ageList),
+            o.write('\\newcommand\\nbUser{{{}}}\n'.format(len(filteredUser)))
+            o.write('\\newcommand\\minAge{{{}}}\n'.format(min(ageList)))
+            o.write('\\newcommand\\meanAge{{{:2.2f}}}\n'.format(
+                sum(ageList)/len(ageList) if len(ageList) > 0 else -1,))
+            o.write('\\newcommand\\meanAgeFloor{{{:2.0f}}}\n'.format(
+                sum(ageList)/len(ageList) if len(ageList) > 0 else -1,))
+            o.write('\\newcommand\\maxAge{{{}}}\n'.format(max(ageList)))
+            o.write('\\newcommand\\ratioWoman{{{}}}\n'.format(
                 int(100*sum(womanByAge.values())/len(filteredUser))
-                    if len(filteredUser) > 0 else -1,
+                if len(filteredUser) > 0 else -1))
+            o.write('\\newcommand\\ratioFirstTime{{{}}}\n'.format(
                 int(100*sum(firstTimeByAge.values()) / len(filteredUser))
-                    if len(filteredUser) > 0 else -1
-            ))
-            o.write('\end{tabular}\n')
+                    if len(filteredUser) > 0 else -1))
+            o.write('\\newcommand\\meanNbHourUsed{{{}}}\n'.format(
+                np.percentile(nbHourUsedIfNotFirstTime, 50)))
 
         with open(pathAgeStats, 'w') as o:
             o.write('ageMin ageMax nbUser nbWoman nbMan nbFirstTime\n')
