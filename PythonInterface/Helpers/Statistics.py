@@ -175,7 +175,7 @@ class AggregatedResults(object):
                                 # processedResult.startOffsetInSecond +
                                 # processedResult.skiptime
                                 )
-        self.maxEndTime = max(self.minStartTime,
+        self.maxEndTime = max(self.maxEndTime,
                               max(processedResult.quaternions.keys())  # +
                               # processedResult.startOffsetInSecond +
                               # processedResult.skiptime
@@ -384,6 +384,59 @@ class AggregatedResults(object):
                 plt.close()
                 vo.AddPicture(image)
                 plt.close()
+
+    def StoreVisionDistance(self, pathToFile):
+        """Compute the vision distance cdf per quaternion sample and store it."""
+        listFilteredQuat = list()
+        segSize = 2
+        for processedResult in self.processedResultList:
+            listFilteredQuat.append(
+                processedResult.filteredQuaternions)
+        ans = Q.ComputeVisionDistanceCdfs(listFilteredQuat, 100,
+                                          50, 110, 90)
+        with open('{}.txt'.format(pathToFile), 'w') as o:
+            for timestamp in ans:
+                o.write('{}'.format(timestamp))
+                for dist in ans[timestamp]:
+                    o.write(';{}'.format(dist))
+                o.write('\n')
+        with open('{}_median.txt'.format(pathToFile), 'w') as o:
+            o.write('timestamp;medDist\n')
+            for timestamp in ans:
+                o.write('{}'.format(timestamp))
+                o.write(';{}'.format(np.percentile(ans[timestamp],50)))
+                o.write('\n')
+        print('Nb segs = ', math.floor((self.maxEndTime - self.minStartTime)/ segSize))
+        with open('{}_segments.txt'.format(pathToFile), 'w') as o:
+            o.write('timestamp;medDist\n')
+            for segId in range(0,
+                               math.floor(
+                                   (self.maxEndTime - self.minStartTime)/
+                                   segSize)):
+                o.write('{}'.format(segId))
+                for timestamp in ans:
+                    if math.floor((timestamp - self.minStartTime)/segSize) == \
+                            segId:
+                        for dist in ans[timestamp]:
+                            o.write(';{}'.format(dist))
+                o.write('\n')
+        with open('{}_segments_median.txt'.format(pathToFile), 'w') as o:
+            o.write('timestamp;medDist\n')
+            for segId in range(0,
+                               math.floor(
+                                   (self.maxEndTime - self.minStartTime)/
+                                   segSize)):
+                o.write('{}'.format(segId))
+                dists = list()
+                for timestamp in ans:
+                    if math.floor((timestamp - self.minStartTime)/segSize) == \
+                            segId:
+                        for dist in ans[timestamp]:
+                            dists.append(dist)
+                med = np.percentile(dists, 50) if len(dists) > 0 else -1
+                o.write(';{}'.format(med))
+                o.write('\n')
+
 
 
 class ProcessedResult(object):
@@ -1142,12 +1195,10 @@ class Statistics(object):
                 ac = AggregateContainer.Load(dumpPath, step, aggSize)
                 if ac.isNew:
                     aggResult = sum(resultsByVideo)
-                    listFilteredQuat = list()
-                    for processedResult in aggResult.processedResultList:
-                        listFilteredQuat.append(
-                            processedResult.filteredQuaternions)
-                    ans = Q.ComputeVisionDistanceCdfs(listFilteredQuat, 100,
-                                                      50, 110, 90)
+                    aggResult.StoreVisionDistance(PATH_TO_STATISTIC_RESULTS + \
+                                                  '/videos/'
+                                                  '{}_visionDistance'.format(
+                                                      videoId))
                     # DEBUG
                     aggResult.StorePositions(
                         PATH_TO_STATISTIC_RESULTS+'/videos/{}'.format(videoId),

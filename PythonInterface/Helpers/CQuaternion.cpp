@@ -416,7 +416,7 @@ SCALAR Distance(const VisionMat& vm1, const VisionMat& vm2)
   SCALAR ans(0);
   const auto width = vm1.size();
   const auto height = vm1[0].size();
-  #pragma omp parallel for collapse(2)
+  //#pragma omp parallel for collapse(2) reduction(+:ans)
   for(size_t i = 0; i < width; ++i)
   {
     for(size_t j = 0; j < height; ++j)
@@ -533,7 +533,6 @@ boost::python::dict ComputeVisionDistanceCdfs(boost::python::list listOfFiltered
         visionMatVector.emplace_back(std::move(visionMat));
       }
     }
-    std::cout << ". " << std::flush;
     for (size_t i = 0; i < visionMatVector.size(); ++i)
     {
       for (size_t j = 0; j < visionMatVector.size(); ++j)
