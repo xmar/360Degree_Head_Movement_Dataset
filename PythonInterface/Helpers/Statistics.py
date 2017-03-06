@@ -385,6 +385,7 @@ class AggregatedResults(object):
                 vo.AddPicture(image)
                 plt.close()
 
+
 class ProcessedResult(object):
     """Contains the quaternions and timestamp information of a result."""
 
@@ -633,6 +634,11 @@ class ProcessedResult(object):
         timestampList2 = timestampList1.copy()
         t1 = timestampList1[0]
         t2 = timestampList2[0]
+        startTime = minTimestamp
+        for t_mid in np.arange(minTimestamp, maxTimestamp, step/2):
+            if t_mid >= t1:
+                minTimestamp = t_mid
+                break
         for t_mid in np.arange(minTimestamp, maxTimestamp, step/2):
             while len(timestampList1) > 0 and timestampList1[0] <= t_mid:
                 t1 = timestampList1.pop(0)
@@ -674,6 +680,89 @@ class ProcessedResult(object):
                     o.write('{} {} {}\n'.format(
                         i, j, self.positionMatrix[j, i]
                     ))
+
+    @staticmethod
+    def StoreAngVelStats(processedResultList, outputPath):
+        """Store all angVelStats.
+
+        :param processedResultList: List of tuple (userId, videoId,
+        ProcessedResult)  from which we want to get the angular velocity data
+        :param outputPath: path without extension to the output file
+        """
+        minStartTime = dict()
+        maxEndTime = dict()
+        segSize = 2
+        for userId, videoId, processedResult in processedResultList:
+            if videoId not in minStartTime:
+                minStartTime[videoId] = sys.maxsize
+            if videoId not in maxEndTime:
+                maxEndTime[videoId] = 0
+            minStartTime[videoId] = min(minStartTime[videoId],
+                                        min(processedResult
+                                            .filteredQuaternions.keys()))
+            maxEndTime[videoId] = max(maxEndTime[videoId],
+                                      max(processedResult
+                                          .filteredQuaternions.keys()))
+        with open('{}_angVelGlobal.txt'.format(outputPath), 'w') as o:
+            for userId, videoId, processedResult in processedResultList:
+                o.write('{};{}'.format(userId, videoId))
+                for angVelTimestamp in processedResult.angularVelocityDict:
+                    q, angVel = \
+                        processedResult.angularVelocityDict[angVelTimestamp]
+                    o.write(';{}'.format(angVel.Norm()))
+                o.write('\n')
+        with open('{}_angVelSegment.txt'.format(outputPath), 'w') as o:
+            for userId, videoId, processedResult in processedResultList:
+                for segId in range(0, math.floor((maxEndTime[videoId] -
+                                                  minStartTime[videoId]) /
+                                                 segSize)):
+                    o.write('{};{};{}'.format(userId, videoId, segId))
+                    for angVelTimestamp in processedResult.angularVelocityDict:
+                        q, angVel = \
+                            processedResult\
+                            .angularVelocityDict[angVelTimestamp]
+                        if math.floor((angVelTimestamp -
+                                       minStartTime[videoId]) /
+                                      segSize) == segId:
+                            o.write(';{}'.format(angVel.Norm()))
+                    o.write('\n')
+        with open('{}_angVelGlobalTimeSerie.txt'.format(outputPath), 'w') as o:
+            for userId, videoId, processedResult in processedResultList:
+                o.write('{};{}'.format(userId, videoId))
+                for angVelTimestamp in processedResult.angularVelocityDict:
+                    q, angVel = \
+                        processedResult.angularVelocityDict[angVelTimestamp]
+                    o.write(';{};{}'.format(angVelTimestamp, angVel.Norm()))
+                o.write('\n')
+        with open('{}_orthoDistGlobal.txt'.format(outputPath), 'w') as o:
+            for userId, videoId, processedResult in processedResultList:
+                o.write('{};{}'.format(userId, videoId))
+                for orthoDist in processedResult.maxOrthodromicDistance[2]:
+                    o.write(';{}'.format(orthoDist))
+                o.write('\n')
+        with open('{}_orthoDistSegment.txt'.format(outputPath), 'w') as o:
+            for userId, videoId, processedResult in processedResultList:
+                for segId in range(0, math.floor((maxEndTime[videoId] -
+                                                  minStartTime[videoId]) /
+                                                 segSize)):
+                    o.write('{};{};{}'.format(userId, videoId, segId))
+                    currentTs = min(processedResult.filteredQuaternions.keys())
+                    for orthoDist in processedResult.maxOrthodromicDistance[2]:
+                        if math.floor((currentTs -
+                                       minStartTime[videoId]) /
+                                      segSize) == segId:
+                            o.write(';{}'.format(orthoDist))
+                        currentTs += processedResult.step
+                    o.write('\n')
+        with open('{}_orthoDistGlobalTimeSerie.txt'.format(outputPath), 'w') \
+                as o:
+            for userId, videoId, processedResult in processedResultList:
+                o.write('{};{}'.format(userId, videoId))
+                currentTs = min(processedResult.filteredQuaternions.keys())
+                for orthoDist in processedResult.maxOrthodromicDistance[2]:
+                    o.write(';{};{}'.format(currentTs, orthoDist))
+                    currentTs += processedResult.step
+                o.write('\n')
 
 
 class ResultContainer(object):
@@ -1053,6 +1142,13 @@ class Statistics(object):
                 ac = AggregateContainer.Load(dumpPath, step, aggSize)
                 if ac.isNew:
                     aggResult = sum(resultsByVideo)
+                    listFilteredQuat = list()
+                    for processedResult in aggResult.processedResultList:
+                        listFilteredQuat.append(
+                            processedResult.filteredQuaternions)
+                    ans = Q.ComputeVisionDistanceCdfs(listFilteredQuat, 100,
+                                                      50, 110, 90)
+                    # DEBUG
                     aggResult.StorePositions(
                         PATH_TO_STATISTIC_RESULTS+'/videos/{}'.format(videoId),
                         vmax=None
@@ -1156,6 +1252,17 @@ class Statistics(object):
         # pool.close()
         # pool.join()
         # del self.workingThread
+
+        listProcessedResult = list()
+        for resultId in self.resultsContainers:
+            rc = self.resultsContainers[resultId]
+            videoId = resultId.split('_')[-1]
+            userId = resultId[:-len(videoId)-1]
+            listProcessedResult.append((userId, videoId,
+                                        rc.GetProcessedResult(step)))
+        ProcessedResult.StoreAngVelStats(listProcessedResult,
+                                         PATH_TO_STATISTIC_RESULTS +
+                                         '/total/stats')
         self.done = True
         self.progressBar = None
         self.workingThread = None

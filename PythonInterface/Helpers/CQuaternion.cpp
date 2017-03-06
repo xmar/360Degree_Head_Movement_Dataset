@@ -410,6 +410,153 @@ boost::python::list ComputeVision(boost::python::dict& filteredQuaternions,
   return ans;
 }
 
+using VisionMat = std::vector<std::vector<int>>;
+SCALAR Distance(const VisionMat& vm1, const VisionMat& vm2)
+{
+  SCALAR ans(0);
+  const auto width = vm1.size();
+  const auto height = vm1[0].size();
+  #pragma omp parallel for collapse(2)
+  for(size_t i = 0; i < width; ++i)
+  {
+    for(size_t j = 0; j < height; ++j)
+    {
+      auto phi = (PI*j)/height;
+      ans += std::abs(vm1[i][j] - vm2[i][j])*2*PI*PI*std::sin(phi)/(width*height);
+    }
+  }
+  return ans;
+}
+
+void PrintProgress( size_t current, size_t max)
+{
+  auto ratio = SCALAR(100*current) / max;
+  auto s = std::string("\033[1K\r[");
+  auto n = std::floor(ratio);
+  for (size_t i = 0; i < n; ++i)
+  {
+    s += "=";
+  }
+  if (n < 100);
+  {
+    s += ">";
+    for (size_t i = 0; i < 100-n-1; ++i)
+    {
+      s += ".";
+    }
+  }
+  s += "] "+std::to_string(ratio)+"%";
+  std::cout << s << std::flush;
+}
+
+
+boost::python::dict ComputeVisionDistanceCdfs(boost::python::list listOfFilteredQuaternions,
+  size_t width, size_t height, SCALAR horizontalFoVAngle, SCALAR verticalFoVAngle)
+{
+  namespace py = boost::python;
+  std::map<SCALAR, size_t> countMap;
+  std::map<SCALAR, py::list> ansMap;
+  for (size_t i = 0; i < py::len(listOfFilteredQuaternions); ++i)
+  {
+    py::dict filteredQuaternions = py::extract<py::dict>(listOfFilteredQuaternions[i]);
+    py::list keys = filteredQuaternions.keys();
+    for (size_t k = 0; k < py::len(keys); ++k)
+    {
+      SCALAR timestamp = py::extract<SCALAR>(keys[k]);
+      if (countMap.count(timestamp) == 0)
+      {
+        countMap[timestamp] = 0;
+      }
+      ++countMap[timestamp];
+      if (countMap[timestamp] == 2)
+      {
+        ansMap[timestamp] = py::list();
+      }
+    }
+  }
+  auto y = std::sqrt(1-std::cos(horizontalFoVAngle));
+  auto z = std::sqrt(1-std::cos(verticalFoVAngle));
+  auto a = Vector(1, y, z);
+  auto b = Vector(1, y, -z);
+  auto c = Vector(1, -y, -z);
+  auto d = Vector(1, -y, z);
+  // compute inward normal to the delimitation plan
+  auto n_ab = a ^ b;
+  n_ab = n_ab/n_ab.Norm();
+  auto n_bc = b ^ c;
+  n_bc = n_bc/n_bc.Norm();
+  auto n_cd = c ^ d;
+  n_cd = n_cd/n_cd.Norm();
+  auto n_da = d ^ a;
+  n_da = n_da/n_da.Norm();
+
+  std::cout << std::endl;
+  auto current = 0;
+  PrintProgress(current, ansMap.size());
+  for (auto const& item:  ansMap)
+  {
+    auto const& timestamp = item.first;
+    std::vector<VisionMat> visionMatVector;
+    for (size_t k = 0; k < py::len(listOfFilteredQuaternions); ++k)
+    {
+      py::dict filteredQuaternions = py::extract<py::dict>(listOfFilteredQuaternions[k]);
+      py::extract<Quaternion> value(filteredQuaternions.get(timestamp));
+      if (value.check())
+      {
+        //if we are here that mean a quaternion exist at this timestamp in this filtered list
+        Quaternion q = value;
+        auto visionMat = std::vector<std::vector<int>>(width, std::vector<int>(height, 0));
+        for (size_t i = 0; i < width; ++i)
+        {
+          for (size_t j = 0; j < height; ++j)
+          {
+            auto theta = PI-((2.0*PI*i)/width);
+            auto phi = (PI*j)/height;
+            //p is the direction vector of this pixel
+            auto p = Vector::FromSpherical(theta, phi);
+            auto p_headFrame = q.Conj().Rotation(p);
+
+            // auto n_ab_rot = q.Rotation(n_ab);
+            // auto n_bc_rot = q.Rotation(n_bc);
+            // auto n_cd_rot = q.Rotation(n_cd);
+            // auto n_da_rot = q.Rotation(n_da);
+            // test if p is inside the viewport
+            if (p_headFrame * n_ab > 0 &&
+                    p_headFrame * n_bc > 0 &&
+                    p_headFrame * n_cd > 0 &&
+                    p_headFrame * n_da > 0)
+            {
+            visionMat[i][j] = 1;
+            }
+          }
+        }
+        visionMatVector.emplace_back(std::move(visionMat));
+      }
+    }
+    std::cout << ". " << std::flush;
+    for (size_t i = 0; i < visionMatVector.size(); ++i)
+    {
+      for (size_t j = 0; j < visionMatVector.size(); ++j)
+      {
+        if (i != j)
+        {
+           auto dist = Distance(visionMatVector[i], visionMatVector[j]);
+           ansMap[timestamp].append(dist);
+        }
+      }
+    }
+    ++current;
+    PrintProgress(current, ansMap.size());
+  }
+  py::dict ans;
+  for (auto& item:  ansMap)
+  {
+    ans[item.first] = item.second;
+  }
+  std::cout << std::endl << "DEBUG C++: done" << std::endl;
+  return ans;
+}
+
 BOOST_PYTHON_MODULE(CQuaternion)
 {
   using namespace boost::python;
@@ -485,6 +632,7 @@ BOOST_PYTHON_MODULE(CQuaternion)
 
     def("ComputeMaxOrthodromicDistances", ComputeMaxOrthodromicDistances);
     def("ComputeVision", ComputeVision);
+    def("ComputeVisionDistanceCdfs", ComputeVisionDistanceCdfs);
 
     implicitly_convertible<SCALAR, Quaternion>();
     implicitly_convertible<Vector, Quaternion>();
