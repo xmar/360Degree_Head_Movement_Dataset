@@ -175,10 +175,10 @@ class QuestionnaireFrame(Frame):
         self.impairmentSpinbox.grid(row=row, column=1)
         row += 1
 
-        # used HDM
+        # used HMD
         self.usedHMDLabel = Label(self,
                                   text='How many hours have \n'
-                                       'you already used a HDM?'
+                                       'you already used a HMD?'
                                   )
         self.usedHMDValue = StringVar(self)
         self.usedHMDEntry = Entry(self, textvariable=self.usedHMDValue,
@@ -349,7 +349,7 @@ class QuestionnaireFrame(Frame):
             with open(pathToFormAns, 'w') as formAns:
                 formAns.write('#questionId;answer(s) -> 0 = uid; 1 = gender;'
                               ' 2 = age; 3 = impairment;'
-                              ' 4 = nbHour of HDM usage;'
+                              ' 4 = nbHour of HMD usage;'
                               ' 5 = apps used; 6 = devices used\n')
                 # userId
                 formAns.write('0;{}\n'.format(uid))
@@ -359,7 +359,7 @@ class QuestionnaireFrame(Frame):
                 formAns.write('2;{}\n'.format(self.ageValue.get()))
                 # impairment
                 formAns.write('3;{}\n'.format(self.impairmentValue.get()))
-                # hours of HDM usage
+                # hours of HMD usage
                 formAns.write('4;{}\n'.format(self.usedHMDValue.get()))
                 appsStr = ''
                 devicesStr = ''
