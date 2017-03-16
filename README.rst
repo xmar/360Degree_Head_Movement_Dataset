@@ -54,3 +54,9 @@ work as it is with other HMDs such as the Oculus Rift or the HTC Vive
 if the osvr driver for those HMDs are installed.
 
 We use a Nvidia GE 1060 graphic card.
+
+
+Contacts:
+---------
+E-mail: xavier.corbillon[at]imt-atlantique.fr
+Website: http://dash.ipv6.enstb.fr/headMovements

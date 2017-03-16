@@ -119,6 +119,21 @@ you can use the ExportResults.py python3 script. It will read the results folder
 generate a dataset.tar.gz archive that contains only the dataset without the private user
 information nor the post-processing results folder.
 
+Test platform:
+--------------
+
+All the codes and scripts were tested on linux: archlinux with
+up-to-date packages.
+In theory, the C++ software will work on windows with the windows
+version of the OSVR API. We never tested it.
+
+We used the Razer OSVR HDK2 Head Mounted Display. The sofware should
+work as it is with other HMDs such as the Oculus Rift or the HTC Vive
+if the osvr driver for those HMDs are installed.
+
+We use a Nvidia GE 1060 graphic card.
+
 Contacts:
 ---------
 E-mail: xavier.corbillon[at]imt-atlantique.fr
+Website: http://dash.ipv6.enstb.fr/headMovements
